@@ -2,8 +2,20 @@
 # Install Omarchy Overwatch for a local user (Omarchy / Arch).
 set -euo pipefail
 
+# Usage: install.sh [dest] [--service]
+#   --service  also install+enable a systemd --user unit that keeps the preview
+#              server running (useful with `tailscale serve` or a reverse proxy).
+WITH_SERVICE=0
+ARGS=()
+for arg in "$@"; do
+  case "${arg}" in
+    --service) WITH_SERVICE=1 ;;
+    *) ARGS+=("${arg}") ;;
+  esac
+done
+
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${1:-${HOME}/Apps/omarchy-overwatch}"
+DEST="${ARGS[0]:-${HOME}/Apps/omarchy-overwatch}"
 BIN_DIR="${HOME}/.local/bin"
 APP_DIR="${HOME}/.local/share/applications"
 ICON_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
@@ -52,11 +64,46 @@ Icon=omarchy-overwatch
 Terminal=false
 Categories=Network;Security;Utility;
 StartupNotify=true
-StartupWMClass=Overwatch
 EOF
 
 if command -v update-desktop-database >/dev/null; then
   update-desktop-database "${APP_DIR}" >/dev/null 2>&1 || true
+fi
+
+if [[ "${WITH_SERVICE}" -eq 1 ]]; then
+  UNIT_DIR="${HOME}/.config/systemd/user"
+  mkdir -p "${UNIT_DIR}"
+
+  # systemd has no shell, so npm must be an absolute path. Version managers
+  # (mise/nvm/asdf) resolve to a version-pinned directory that stops existing at
+  # the next Node upgrade, so prefer a stable system npm when one is present.
+  NPM_BIN="$(command -v npm)"
+  case "${NPM_BIN}" in
+    */.local/share/mise/*|*/.nvm/*|*/.asdf/*|*/fnm/*)
+      [[ -x /usr/bin/npm ]] && NPM_BIN=/usr/bin/npm
+      ;;
+  esac
+  cat > "${UNIT_DIR}/omarchy-overwatch.service" <<EOF
+[Unit]
+Description=Omarchy Overwatch preview server (127.0.0.1:4173)
+Documentation=https://github.com/smfworks/omarchy-overwatch
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${DEST}
+ExecStart=${NPM_BIN} run preview
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now omarchy-overwatch.service
+  echo "==> systemd --user service enabled (omarchy-overwatch.service)."
+  echo "    The preview server now starts with your session, on 127.0.0.1:4173."
 fi
 
 echo "==> Installed."
