@@ -54,8 +54,17 @@ export function OverwatchGlobe() {
                   ? '#8b9cff'
                   : p.kind === 'alert'
                     ? '#ff5d6c'
-                    : '#3ee0c8',
-            size: p.kind === 'quake' ? Math.min(1.2, 0.28 + (p.mag ?? 2) * 0.12) : 0.28,
+                    : p.kind === 'vessel'
+                      ? '#4cc9f0'
+                      : p.kind === 'fire'
+                        ? '#ff7a3d'
+                        : '#3ee0c8',
+            size:
+              p.kind === 'quake'
+                ? Math.min(1.2, 0.28 + (p.mag ?? 2) * 0.12)
+                : p.kind === 'fire'
+                  ? 0.22
+                  : 0.28,
             kind: p.kind,
           }))
         : [],
@@ -83,11 +92,11 @@ export function OverwatchGlobe() {
   const rings = useMemo(
     () =>
       liveMarkers
-        .filter((m) => m.kind === 'quake')
+        .filter((m) => m.kind === 'quake' || m.kind === 'fire')
         .map((m) => ({
           lat: m.lat,
           lng: m.lng,
-          maxR: 3.5,
+          maxR: m.kind === 'fire' ? 2.2 : 3.5,
           color: m.color,
         })),
     [liveMarkers],

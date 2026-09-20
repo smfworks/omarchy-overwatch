@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EMPTY_FILTERS, filterTools, TOOLS, type CatalogFilters } from './catalog'
 import type { OsintTool } from './catalog/types'
+import { pinFromHotspot, pinFromPoint, pinFromTool } from './cases/pins'
+import {
+  activeCase,
+  addPin,
+  createEmptyCase,
+  loadCases,
+  saveCases,
+  sanitizeStore,
+  upsertCase,
+} from './cases/storage'
+import type { CaseStoreV1 } from './cases/types'
 import { type Hotspot } from './data/hotspots'
 import { fetchTicker, type FeedStatus, type TickerItem } from './feeds/rss'
 import { OverwatchGlobe } from './globe/OverwatchGlobe'
 import { classifyStatus, LAYER_DEFS, type GeoPoint, type LayerState } from './globe/layers'
 import { DockLayout } from './layout/DockLayout'
 import { loadLayout, saveLayout, sanitizeLayout, type LayoutState, type PanelId } from './layout/storage'
+import { CaseNotesDrawer } from './panels/CaseNotesDrawer'
 import { CatalogPanel } from './panels/CatalogPanel'
 import { DetailPanel } from './panels/DetailPanel'
 import { HelpOverlay } from './panels/HelpOverlay'
@@ -37,6 +49,8 @@ function Provider({ children }: { children: ReactNode }) {
   const [tickerError, setTickerError] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; altitude: number } | null>(null)
+  const [caseStore, setCaseStoreState] = useState<CaseStoreV1>(() => loadCases())
+  const [casesDrawerOpen, setCasesDrawerOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   const setLayout = useCallback((next: LayoutState | ((prev: LayoutState) => LayoutState)) => {
@@ -46,6 +60,14 @@ function Provider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveLayout(layout)
   }, [layout])
+
+  const setCaseStore = useCallback((next: CaseStoreV1 | ((prev: CaseStoreV1) => CaseStoreV1)) => {
+    setCaseStoreState((prev) => sanitizeStore(typeof next === 'function' ? next(prev) : next))
+  }, [])
+
+  useEffect(() => {
+    saveCases(caseStore)
+  }, [caseStore])
 
   const visibleTools = useMemo(() => filterTools(TOOLS, filters), [filters])
 
@@ -171,6 +193,23 @@ function Provider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const pinSelection = useCallback(() => {
+    setCaseStore((prev) => {
+      const pin =
+        selection?.kind === 'tool'
+          ? pinFromTool(selection.tool)
+          : selection?.kind === 'hotspot'
+            ? pinFromHotspot(selection.hotspot)
+            : selection?.kind === 'point'
+              ? pinFromPoint(selection.point)
+              : null
+      if (!pin) return prev
+      const rec = activeCase(prev) ?? createEmptyCase('Untitled case')
+      return upsertCase(prev, addPin(rec, pin))
+    })
+    if (selection) setCasesDrawerOpen(true)
+  }, [selection, setCaseStore])
+
   const focusSearch = useCallback(() => {
     searchRef.current?.focus()
     searchRef.current?.select()
@@ -194,6 +233,10 @@ function Provider({ children }: { children: ReactNode }) {
           setHelpOpen(false)
           return
         }
+        if (casesDrawerOpen) {
+          setCasesDrawerOpen(false)
+          return
+        }
         if (selection) {
           setSelection(null)
           return
@@ -205,6 +248,10 @@ function Provider({ children }: { children: ReactNode }) {
         target?.blur?.()
       }
       if (typing) return
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        setCasesDrawerOpen((v) => !v)
+      }
       if (e.key === '1') togglePanel('left')
       if (e.key === '2') togglePanel('right')
       if (e.key === '3') togglePanel('top')
@@ -212,7 +259,7 @@ function Provider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [filters.query, focusSearch, helpOpen, selection, togglePanel])
+  }, [casesDrawerOpen, filters.query, focusSearch, helpOpen, selection, togglePanel])
 
   const value = {
     layout,
@@ -236,6 +283,11 @@ function Provider({ children }: { children: ReactNode }) {
     searchRef,
     focusSearch,
     flyTo,
+    caseStore,
+    setCaseStore,
+    casesDrawerOpen,
+    setCasesDrawerOpen,
+    pinSelection,
   }
 
   return <OverwatchContext.Provider value={value}>{children}</OverwatchContext.Provider>
@@ -253,6 +305,7 @@ export default function App() {
           center={<OverwatchGlobe />}
         />
         <HelpOverlay />
+        <CaseNotesDrawer />
       </div>
     </Provider>
   )

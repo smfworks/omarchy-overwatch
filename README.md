@@ -82,8 +82,8 @@ Docks persist in `localStorage` (`omarchy-overwatch.layout.v1`):
 | Dock | Default | Contents |
 | --- | --- | --- |
 | Left | on | Category chips, search, tool cards |
-| Right | on | Tool / hotspot / live-point dossier + Open tool |
-| Top | on | Clock, filters, live-layer toggles |
+| Right | on | Tool / hotspot / live-point dossier + Open tool / Pin to case |
+| Top | on | Clock, filters, live-layer toggles, case-notes control |
 | Bottom | on | BBC World / ReliefWeb / GDACS ticker (honest empty/ERR) |
 
 Resize the inner edges. Hide with the × buttons or keys `1` `2` `3` `4`. Reset with the home icon.
@@ -93,8 +93,9 @@ Resize the inner edges. Hide with the × buttons or keys `1` `2` `3` `4`. Reset 
 | Key | Action |
 | --- | --- |
 | `/` | Focus catalog search |
-| `Esc` | Close help → clear selection → clear query |
+| `Esc` | Close help → close case notes → clear selection → clear query |
 | `1` / `2` / `3` / `4` | Toggle left / right / top / bottom |
+| `n` | Case notes drawer |
 | `?` | Help overlay |
 
 ## Globe layers
@@ -103,14 +104,57 @@ Toggles in the status strip. Status is **LIVE**, **STALE**, **ERR**, or **OFF** 
 
 | Layer | Source | Key |
 | --- | --- | --- |
-| USGS earthquakes | `earthquake.usgs.gov` GeoJSON (M2.5+ day) | none |
-| NASA EONET | natural events | none |
-| OpenSky ADS-B | sampled `opensky-network.org` states | none; often rate-limited |
-| NWS alerts | `api.weather.gov` (US) | none |
+| USGS | `earthquake.usgs.gov` GeoJSON (M2.5+ day) | none |
+| EONET | NASA natural events | none |
+| ADS-B | sampled `opensky-network.org` states | optional; see below |
+| NWS | `api.weather.gov` (US) | none |
+| AIS | AISStream WebSocket snapshot (`stream.aisstream.io`) | `AISSTREAM_API_KEY` |
+| FIRMS | NASA FIRMS VIIRS 24h detections | optional `FIRMS_MAP_KEY` |
 
 Demo **hotspots** (Kyiv, Hormuz, Suez, Taiwan Strait, etc.) are static geography for navigation. Clicking one opens a dossier of related catalog tools, not a live situation report.
 
 Dev and `vite preview` proxy `/proxy/*` so the browser can reach those APIs. Direct static file hosting without the Vite preview proxy will show **ERR** on layers/feeds that lack CORS — that is expected and honest.
+
+### Optional env keys
+
+Copy [`.env.example`](.env.example) to `.env` (gitignored) and restart `npm run dev` / `npm run preview`. Keys stay on the local Vite process — they are not committed and are not baked into the static JS bundle.
+
+| Variable | Layer | Notes |
+| --- | --- | --- |
+| `AISSTREAM_API_KEY` | AIS | Required for LIVE ships. Free key from [aisstream.io](https://aisstream.io). AISStream has **no REST snapshot** and no browser CORS, so Overwatch collects a short sampled WebSocket snapshot via `/proxy/ais/snapshot`. Without a key the toggle is **ERR** and **no vessels are invented**. |
+| `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | ADS-B | Optional OAuth2 client credentials (current OpenSky REST method). Raises rate limits vs anonymous. |
+| `OPENSKY_USERNAME` / `OPENSKY_PASSWORD` | ADS-B | Optional legacy HTTP Basic Auth. OpenSky stopped accepting username/password for REST in 2026; if set, Overwatch still sends them. A **401** is an honest failure. |
+| `FIRMS_MAP_KEY` | FIRMS | Optional. The layer tries the public 24h Suomi NPP VIIRS CSV first (no key). If that is blocked, `/proxy/firms/api/active` injects this MAP_KEY into the FIRMS area API. |
+
+OpenSky **401** (unauthorized) and **429** (rate limited) surface as **ERR** with that status — the globe does not paint placeholder aircraft. Anonymous OpenSky is often blocked.
+
+FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe stays usable. Same for AIS (unique MMSI cap) and ADS-B (stride sample).
+
+### Proxies
+
+| Prefix | Upstream |
+| --- | --- |
+| `/proxy/usgs` | `https://earthquake.usgs.gov` |
+| `/proxy/eonet` | `https://eonet.gsfc.nasa.gov` |
+| `/proxy/opensky` | `https://opensky-network.org` (auth headers injected when env is set) |
+| `/proxy/nws` | `https://api.weather.gov` |
+| `/proxy/firms` | `https://firms.modaps.eosdis.nasa.gov` |
+| `/proxy/ais/*` | AISStream snapshot/status (local plugin, not a public REST API) |
+| `/proxy/bbc` | `https://feeds.bbci.co.uk` |
+| `/proxy/reliefweb` | `https://reliefweb.int` |
+| `/proxy/gdacs` | `https://www.gdacs.org` |
+
+## Case notes
+
+Local-only investigation scratchpad. Open with **n**, the **N** control in the status strip, or **Pin to case** on a dossier.
+
+- Create / rename / delete cases
+- Pin catalog tools, demo hotspots, and live-layer points (stored as ids, labels, URLs/coordinates — not fabricated intel)
+- Freeform notes (plaintext or light markdown; preview is local-only)
+- Persist in `localStorage` key `omarchy-overwatch.cases.v1`
+- Export / import one case as JSON
+
+Overwatch never auto-fills notes or pins. Importing JSON creates a **new** case id so it will not silently overwrite another case.
 
 ## Catalog
 

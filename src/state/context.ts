@@ -1,6 +1,7 @@
-import { createContext, useContext, type RefObject } from 'react'
+import { createContext, useContext, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { CatalogFilters } from '../catalog'
 import type { OsintTool } from '../catalog/types'
+import type { CaseStoreV1 } from '../cases/types'
 import type { Hotspot } from '../data/hotspots'
 import type { LayoutState, PanelId } from '../layout/storage'
 import type { GeoPoint, LayerState } from '../globe/layers'
@@ -34,6 +35,11 @@ export interface OverwatchState {
   searchRef: RefObject<HTMLInputElement | null>
   focusSearch: () => void
   flyTo: { lat: number; lng: number; altitude: number } | null
+  caseStore: CaseStoreV1
+  setCaseStore: Dispatch<SetStateAction<CaseStoreV1>>
+  casesDrawerOpen: boolean
+  setCasesDrawerOpen: Dispatch<SetStateAction<boolean>>
+  pinSelection: () => void
 }
 
 export const OverwatchContext = createContext<OverwatchState | null>(null)

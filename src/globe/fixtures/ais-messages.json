@@ -1,0 +1,19 @@
+{
+  "messages": [
+    {
+      "MessageType": "PositionReport",
+      "MetaData": { "MMSI": 368207620, "ShipName": "DEMO SHIP", "Latitude": 33.72, "Longitude": -118.2 },
+      "Message": { "PositionReport": { "UserID": 368207620, "Latitude": 33.72, "Longitude": -118.2 } }
+    },
+    {
+      "MessageType": "PositionReport",
+      "Metadata": { "mmsi": "111", "latitude": 12.5, "longitude": 45.1 },
+      "Message": { "PositionReport": { "UserID": 111, "Latitude": 12.5, "Longitude": 45.1 } }
+    },
+    {
+      "MessageType": "PositionReport",
+      "MetaData": { "ShipName": "NO FIX" },
+      "Message": { "PositionReport": { "UserID": 2 } }
+    }
+  ]
+}

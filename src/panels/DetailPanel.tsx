@@ -8,7 +8,7 @@ function openUrl(url: string) {
 }
 
 export function DetailPanel() {
-  const { selection, selectTool, selectHotspot } = useOverwatch()
+  const { selection, selectTool, selectHotspot, pinSelection } = useOverwatch()
 
   if (!selection) {
     return (
@@ -66,6 +66,9 @@ export function DetailPanel() {
             <button className="btn ghost" onClick={() => navigator.clipboard.writeText(tool.url)}>
               Copy URL
             </button>
+            <button className="btn ghost" onClick={pinSelection}>
+              Pin to case
+            </button>
           </div>
           <div className="disclaimer">
             Confirm the destination yourself. Catalog metadata can lag; Overwatch does not vouch for third-party
@@ -116,6 +119,9 @@ export function DetailPanel() {
             >
               OpenStreetMap
             </button>
+            <button className="btn ghost" onClick={pinSelection}>
+              Pin to case
+            </button>
           </div>
           <div className="disclaimer">
             Hotspots are static demo geography for navigation, not live intel. Coordinates are approximate.
@@ -153,6 +159,9 @@ export function DetailPanel() {
             }}
           >
             Nearest demo hotspot
+          </button>
+          <button className="btn ghost" onClick={pinSelection}>
+            Pin to case
           </button>
         </div>
       </div>

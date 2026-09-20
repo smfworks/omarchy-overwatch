@@ -15,7 +15,10 @@ export function HelpOverlay() {
             <kbd>/</kbd> focus catalog search
           </li>
           <li>
-            <kbd>Esc</kbd> clear selection / close help / clear query
+            <kbd>Esc</kbd> close help → close case notes → clear selection → clear query
+          </li>
+          <li>
+            <kbd>n</kbd> case notes drawer (local scratchpad)
           </li>
           <li>
             <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle left / right / top / bottom docks

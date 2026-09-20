@@ -1,25 +1,7 @@
-export type LayerStatus = 'off' | 'loading' | 'live' | 'stale' | 'err'
+import { describeLayerHttpError, parseAisSnapshot, parseFirmsCsv, parseOpenSkyStates } from './parse'
+import type { GeoPoint, LayerState, LayerStatus } from './types'
 
-export interface GeoPoint {
-  id: string
-  lat: number
-  lng: number
-  label: string
-  mag?: number
-  kind: 'quake' | 'event' | 'aircraft' | 'alert'
-  extra?: string
-}
-
-export interface LayerState {
-  id: string
-  label: string
-  enabled: boolean
-  status: LayerStatus
-  updatedAt: number | null
-  error: string | null
-  points: GeoPoint[]
-  note: string
-}
+export type { GeoPoint, LayerState, LayerStatus } from './types'
 
 const STALE_MS = 15 * 60 * 1000
 
@@ -32,13 +14,47 @@ export function classifyStatus(state: Pick<LayerState, 'enabled' | 'updatedAt' |
   return 'loading'
 }
 
-async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown> {
+async function readErrorDetail(res: Response): Promise<string | undefined> {
+  try {
+    const type = res.headers.get('content-type') ?? ''
+    if (type.includes('json')) {
+      const body = (await res.json()) as { error?: unknown }
+      if (typeof body.error === 'string' && body.error.trim()) return body.error.trim()
+    } else {
+      const text = (await res.text()).trim()
+      if (text) return text.slice(0, 220)
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
+export async function fetchJson(url: string, timeoutMs = 12000, layer?: string): Promise<unknown> {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     const res = await fetch(url, { signal: ctrl.signal })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      const detail = await readErrorDetail(res)
+      throw new Error(describeLayerHttpError(res.status, layer, detail))
+    }
     return await res.json()
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+export async function fetchText(url: string, timeoutMs = 20000, layer?: string): Promise<string> {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: ctrl.signal })
+    if (!res.ok) {
+      const detail = await readErrorDetail(res)
+      throw new Error(describeLayerHttpError(res.status, layer, detail))
+    }
+    return await res.text()
   } finally {
     clearTimeout(t)
   }
@@ -119,29 +135,9 @@ export async function fetchEonet(): Promise<GeoPoint[]> {
   return points
 }
 
-type OpenSkyState = unknown[]
-
 export async function fetchOpenSky(): Promise<GeoPoint[]> {
-  const data = (await fetchJson('/proxy/opensky/api/states/all')) as { states?: OpenSkyState[] }
-  const states = data.states ?? []
-  const sampled = states.filter((_, i) => i % 18 === 0).slice(0, 90)
-  const points: GeoPoint[] = []
-  sampled.forEach((row, i) => {
-    const lon = row[5]
-    const lat = row[6]
-    const callsign = typeof row[1] === 'string' ? row[1].trim() : ''
-    if (typeof lat !== 'number' || typeof lon !== 'number') return
-    const point: GeoPoint = {
-      id: `ac-${typeof row[0] === 'string' ? row[0] : i}`,
-      lat,
-      lng: lon,
-      label: callsign || 'aircraft',
-      kind: 'aircraft',
-    }
-    if (typeof row[2] === 'string') point.extra = row[2]
-    points.push(point)
-  })
-  return points
+  const data = await fetchJson('/proxy/opensky/api/states/all', 15000, 'opensky')
+  return parseOpenSkyStates(data)
 }
 
 interface NwsAlert {
@@ -191,29 +187,66 @@ export async function fetchNwsAlerts(): Promise<GeoPoint[]> {
   return points
 }
 
+export async function fetchAis(): Promise<GeoPoint[]> {
+  const data = await fetchJson('/proxy/ais/snapshot', 20000, 'ais')
+  return parseAisSnapshot(data)
+}
+
+const FIRMS_PUBLIC_CSV =
+  '/proxy/firms/data/active_fire/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_24h.csv'
+
+export async function fetchFirms(): Promise<GeoPoint[]> {
+  const errors: string[] = []
+  try {
+    const csv = await fetchText(FIRMS_PUBLIC_CSV, 25000, 'firms')
+    return parseFirmsCsv(csv)
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'public FIRMS CSV failed')
+  }
+  try {
+    const csv = await fetchText('/proxy/firms/api/active', 25000, 'firms')
+    return parseFirmsCsv(csv)
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'FIRMS MAP_KEY API failed')
+  }
+  throw new Error(errors.join(' · ') || 'FIRMS unavailable')
+}
+
 export const LAYER_DEFS = [
   {
     id: 'earthquakes',
-    label: 'USGS earthquakes',
-    note: 'M2.5+ past 24h via earthquake.usgs.gov (no key).',
+    label: 'USGS',
+    note: 'USGS earthquakes M2.5+ past 24h via earthquake.usgs.gov (no key).',
     fetch: fetchEarthquakes,
   },
   {
     id: 'eonet',
-    label: 'NASA EONET',
-    note: 'Open natural events (fires, storms, volcanoes).',
+    label: 'EONET',
+    note: 'NASA EONET open natural events (fires, storms, volcanoes).',
     fetch: fetchEonet,
   },
   {
     id: 'opensky',
-    label: 'OpenSky ADS-B',
-    note: 'Sampled public aircraft states. Rate-limited; may ERR without auth.',
+    label: 'ADS-B',
+    note: 'OpenSky sampled aircraft states. Optional OPENSKY_CLIENT_ID/SECRET (OAuth2) or OPENSKY_USERNAME/PASSWORD (legacy). Rate-limited; 401/429 are ERR, not fake tracks.',
     fetch: fetchOpenSky,
   },
   {
     id: 'nws',
-    label: 'NWS alerts (US)',
+    label: 'NWS',
     note: 'api.weather.gov active alerts. US-only, no key.',
     fetch: fetchNwsAlerts,
+  },
+  {
+    id: 'ais',
+    label: 'AIS',
+    note: 'AISStream maritime snapshot. Requires AISSTREAM_API_KEY in .env. Sampled live positions only — never invented.',
+    fetch: fetchAis,
+  },
+  {
+    id: 'firms',
+    label: 'FIRMS',
+    note: 'NASA FIRMS VIIRS detections (public 24h CSV, or FIRMS_MAP_KEY API). Sampled by FRP; no invented fires.',
+    fetch: fetchFirms,
   },
 ] as const

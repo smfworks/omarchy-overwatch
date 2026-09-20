@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
-import { defineConfig, type ProxyOptions } from 'vite'
+import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
+import { liveFeedsPlugin } from './vite.live-feeds'
 
 const proxy: Record<string, ProxyOptions> = {
   '/proxy/usgs': {
@@ -12,11 +13,6 @@ const proxy: Record<string, ProxyOptions> = {
     target: 'https://eonet.gsfc.nasa.gov',
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/proxy\/eonet/, ''),
-  },
-  '/proxy/opensky': {
-    target: 'https://opensky-network.org',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/proxy\/opensky/, ''),
   },
   '/proxy/bbc': {
     target: 'https://feeds.bbci.co.uk',
@@ -42,22 +38,33 @@ const proxy: Record<string, ProxyOptions> = {
       Accept: 'application/geo+json',
     },
   },
+  '/proxy/firms': {
+    target: 'https://firms.modaps.eosdis.nasa.gov',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/proxy\/firms/, ''),
+    headers: {
+      'User-Agent': 'OmarchyOverwatch/1.0 (https://github.com/smfworks/omarchy-overwatch)',
+    },
+  },
 }
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: true,
-    port: 5173,
-    proxy,
-  },
-  preview: {
-    host: '127.0.0.1',
-    port: 4173,
-    proxy,
-  },
-  test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-  },
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, '.', '')
+  return {
+    plugins: [react(), liveFeedsPlugin(env)],
+    server: {
+      host: true,
+      port: 5173,
+      proxy,
+    },
+    preview: {
+      host: '127.0.0.1',
+      port: 4173,
+      proxy,
+    },
+    test: {
+      environment: 'node',
+      include: ['src/**/*.test.ts'],
+    },
+  }
 })

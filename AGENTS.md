@@ -15,10 +15,11 @@ A static OSINT **catalog + visualization HUD**. Ship launcher UX, not a recon en
 ```
 src/catalog/     types, tools.ts (source of truth), schema + vitest
 src/data/        static demo hotspots (geography only)
-src/globe/       react-globe.gl wrapper + public-feed adapters
+src/globe/       react-globe.gl wrapper + public-feed adapters/parsers
+src/cases/       local case-notes store (localStorage, export/import)
 src/feeds/       RSS ticker (proxied)
 src/layout/      dock chrome + localStorage
-src/panels/      catalog, dossier, status, ticker, help
+src/panels/      catalog, dossier, status, ticker, help, case drawer
 scripts/         Omarchy install + desktop wrapper
 ```
 
@@ -32,13 +33,15 @@ scripts/         Omarchy install + desktop wrapper
 
 ## Feeds and layers
 
-Browser calls go through Vite `server.proxy` / `preview.proxy` (`/proxy/usgs`, `/proxy/eonet`, `/proxy/opensky`, `/proxy/nws`, `/proxy/bbc`, `/proxy/reliefweb`, `/proxy/gdacs`). Adding a source means adding a proxy entry **and** an honest failure path.
+Browser calls go through Vite `server.proxy` / `preview.proxy` plus `vite.live-feeds.ts` (`/proxy/usgs`, `/proxy/eonet`, `/proxy/opensky`, `/proxy/nws`, `/proxy/firms`, `/proxy/ais`, `/proxy/bbc`, `/proxy/reliefweb`, `/proxy/gdacs`). Adding a source means adding a proxy or live-feed handler **and** an honest failure path.
 
-No API keys in the repo. If a feed needs a key, leave it out or document an optional env var without committing secrets.
+No API keys in the repo. Optional keys live in `.env` (see `.env.example`): `AISSTREAM_API_KEY`, `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET`, `OPENSKY_USERNAME` / `OPENSKY_PASSWORD`, `FIRMS_MAP_KEY`. Never commit secrets. If a feed needs a key and none is configured, show `ERR` / empty — do not invent geodata.
+
+Case notes persist in `omarchy-overwatch.cases.v1`. Do not auto-fill notes or pins.
 
 ## UI
 
-Dark glass HUD. Cyan/amber status language. Keyboard: `/`, `Esc`, `1–4`, `?`. Persist docks in `omarchy-overwatch.layout.v1`.
+Dark glass HUD. Cyan/amber status language. Keyboard: `/`, `Esc`, `1–4`, `n`, `?`. Persist docks in `omarchy-overwatch.layout.v1`.
 
 Globe textures load from unpkg (`three-globe` example night earth). Offline machines will show an untextured globe; that is acceptable.
 

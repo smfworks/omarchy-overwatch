@@ -7,8 +7,18 @@ function utcClock() {
 }
 
 export function StatusStrip() {
-  const { setLayout, togglePanel, filters, layers, toggleLayer, setHelpOpen, visibleTools } =
-    useOverwatch()
+  const {
+    setLayout,
+    togglePanel,
+    filters,
+    layers,
+    toggleLayer,
+    setHelpOpen,
+    visibleTools,
+    setCasesDrawerOpen,
+    casesDrawerOpen,
+    caseStore,
+  } = useOverwatch()
   const [clock, setClock] = useState(utcClock)
 
   useEffect(() => {
@@ -49,6 +59,17 @@ export function StatusStrip() {
           </button>
         ))}
       </div>
+      <button
+        className={`icon-btn cases-btn${casesDrawerOpen ? ' on' : ''}`}
+        title="Case notes (n)"
+        aria-label="Open case notes"
+        aria-expanded={casesDrawerOpen}
+        aria-controls="case-drawer-title"
+        onClick={() => setCasesDrawerOpen((open) => !open)}
+      >
+        N
+        {caseStore.cases.length > 0 && <span className="cases-count">{caseStore.cases.length}</span>}
+      </button>
       <button className="icon-btn" title="Toggle catalog" onClick={() => togglePanel('left')}>
         L
       </button>

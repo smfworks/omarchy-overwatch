@@ -1,0 +1,10 @@
+{
+  "time": 1700000000,
+  "states": [
+    ["abc123", "BAW123  ", "United Kingdom", 1700000000, 1700000000, -0.45, 51.47, 10000, false, 200, 90, 0, null, 10000, "1234", false, 0],
+    ["skip1", "SKIP1", "X", 1, 1, 1, 1, 1, false, 1, 1, 0, null, 1, null, false, 0],
+    ["skip2", "SKIP2", "X", 1, 1, 2, 2, 1, false, 1, 1, 0, null, 1, null, false, 0],
+    ["nullloc", "NONE", "X", 1, 1, null, null, 1, false, 1, 1, 0, null, 1, null, false, 0],
+    ["badlat", "BAD", "X", 1, 1, 10, 999, 1, false, 1, 1, 0, null, 1, null, false, 0]
+  ]
+}
