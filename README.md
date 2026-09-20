@@ -19,15 +19,20 @@ Use this software only to research information you are legally allowed to access
 
 Do not use Overwatch to attempt unauthorized access, credential stuffing, malware operations, or harassment.
 
+## Demo
+
+[![Omarchy Overwatch demo](public/screenshots/hud.png)](docs/demo.mp4)
+
+Short HUD walkthrough (globe, status strip, case notes): [`docs/demo.mp4`](docs/demo.mp4)
+
 ## Screenshots
 
-Place captures in [`public/screenshots/`](public/screenshots/) after a local run:
+Captures from Omarchy on mikesai6 (`npm run preview` at `127.0.0.1:4173`):
 
-| File | Expected content |
+| | |
 | --- | --- |
-| `hud.png` | Full HUD: globe, catalog, dossier, ticker |
-| `catalog.png` | Category filters + tool cards |
-| `hotspot.png` | Hotspot dossier after clicking a beacon |
+| ![Full HUD](public/screenshots/hud.png) | Globe + USGS/EONET LIVE, ticker, status strip |
+| ![Case notes](public/screenshots/cases.png) | Case notes drawer (`n` / **N**) — local scratchpad only |
 
 ## Quick start
 
