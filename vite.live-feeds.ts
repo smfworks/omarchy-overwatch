@@ -142,9 +142,21 @@ async function proxyOpenSky(env: EnvMap, res: SimpleRes): Promise<void> {
     const next = { ...headers }
     if (authorization) next.Authorization = authorization
     else delete next.Authorization
-    return fetch('https://opensky-network.org/api/states/all', { headers: next })
+    return fetch('https://opensky-network.org/api/states/all', {
+      headers: next,
+      signal: AbortSignal.timeout(12_000),
+    })
   }
-  let upstream = await call(auth)
+  let upstream: Response
+  try {
+    upstream = await call(auth)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : 'network error'
+    sendJson(res, 502, {
+      error: `OpenSky unreachable (${detail}). Anonymous /states/all is often blocked or rate-limited — no aircraft were invented.`,
+    })
+    return
+  }
   if (upstream.status === 401 && auth?.startsWith('Bearer ')) {
     try {
       const refreshed = await openSkyAuthorization(env, true)
