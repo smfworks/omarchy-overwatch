@@ -21,9 +21,9 @@ Do not use Overwatch to attempt unauthorized access, credential stuffing, malwar
 
 ## Demo
 
-[![Omarchy Overwatch demo](public/screenshots/hud.png)](docs/demo.mp4)
+[![Omarchy Overwatch v2 demo](public/screenshots/hud.png)](docs/demo.mp4)
 
-Short HUD walkthrough (globe, status strip, case notes): [`docs/demo.mp4`](docs/demo.mp4)
+**v2 full feature tour** (~75s): help overlay, catalog + search, dossier/ticker docks, live layer toggles (USGS / EONET / ADS-B / NWS / AIS / FIRMS), globe orbit + beacon, case notes create/note — [`docs/demo.mp4`](docs/demo.mp4)
 
 ## Screenshots
 
