@@ -1,0 +1,10 @@
+/** User-facing product name. Repo path and CLI remain `omarchy-overwatch`. */
+export const PRODUCT_NAME = 'Overwatch OSINT for Omarchy'
+export const PRODUCT_SHORT = 'Overwatch OSINT'
+export const PRODUCT_HUD_TITLE = 'OVERWATCH OSINT'
+export const PRODUCT_HUD_SUB = 'for Omarchy · public sources'
+export const PRODUCT_TAGLINE = 'Public-source OSINT catalog and visualization HUD'
+export const CLI_NAME = 'omarchy-overwatch'
+export const REPO_PATH = 'smfworks/omarchy-overwatch'
+export const REPO_URL = 'https://github.com/smfworks/omarchy-overwatch'
+export const USER_AGENT = 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)'

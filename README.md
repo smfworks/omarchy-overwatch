@@ -1,6 +1,8 @@
-# Omarchy Overwatch
+# Overwatch OSINT for Omarchy
 
-Dark-theme OSINT **workbench** for [Omarchy Linux](https://omarchy.org/): a configurable HUD, an interactive globe, and a curated catalog of **public** investigation sources.
+Dark-theme OSINT **workbench** for [Omarchy Linux](https://omarchy.org/): a configurable HUD, an interactive globe, locality / storm maps, and a curated catalog of **public** investigation sources.
+
+The product name is **Overwatch OSINT for Omarchy**. The GitHub repo stays [`smfworks/omarchy-overwatch`](https://github.com/smfworks/omarchy-overwatch) and the CLI/bin remains `omarchy-overwatch` so existing install paths keep working.
 
 It is a **dashboard + launcher**, not a SpiderFoot/Maltego/Recon-ng clone. It does not scan networks, steal credentials, or fabricate intelligence.
 
@@ -8,7 +10,7 @@ It is a **dashboard + launcher**, not a SpiderFoot/Maltego/Recon-ng clone. It do
 
 ## Lawful use
 
-Use this software only to research information you are legally allowed to access. Overwatch:
+Use this software only to research information you are legally allowed to access. Overwatch OSINT for Omarchy:
 
 - catalogs third-party public websites and self-hosted tools
 - visualizes **public** GeoJSON / RSS / ADS-B feeds when they respond
@@ -17,11 +19,11 @@ Use this software only to research information you are legally allowed to access
 
 **Passive** means the tool primarily queries an existing public index. **Active** means your browser, your IP, or the vendor will contact a third party (and possibly the target). Both can still be logged. You are responsible for accounts, ToS, privacy law, and workplace policy.
 
-Do not use Overwatch to attempt unauthorized access, credential stuffing, malware operations, or harassment.
+Do not use this HUD to attempt unauthorized access, credential stuffing, malware operations, or harassment.
 
 ## Demo
 
-[![Omarchy Overwatch v2 demo](public/screenshots/hud.png)](docs/demo.mp4)
+[![Overwatch OSINT for Omarchy v2 demo](public/screenshots/hud.png)](docs/demo.mp4)
 
 **v2 full feature tour** (~75s): help overlay, catalog + search, dossier/ticker docks, live layer toggles (USGS / EONET / ADS-B / NWS / AIS / FIRMS), globe orbit + beacon, case notes create/note — [`docs/demo.mp4`](docs/demo.mp4)
 
@@ -66,7 +68,7 @@ chmod +x scripts/install.sh
 ./scripts/install.sh ~/.local/share/omarchy-overwatch
 ```
 
-Then start from the app menu (**Omarchy Overwatch**) or:
+Then start from the app menu (**Overwatch OSINT for Omarchy**) or:
 
 ```bash
 ~/.local/bin/omarchy-overwatch
@@ -88,19 +90,22 @@ Docks persist in `localStorage` (`omarchy-overwatch.layout.v1`):
 
 | Dock | Default | Contents |
 | --- | --- | --- |
-| Left | on | Category chips, search, tool cards |
-| Right | on | Tool / hotspot / live-point dossier + Open tool / Pin to case |
+| Left | on | Category chips, search, **selectable** tool cards |
+| Right | on | Tool / hotspot / live-point / headline dossier + Open / Pin / Inspect |
 | Top | on | Clock, filters, live-layer toggles, case-notes control |
-| Bottom | on | BBC World / ReliefWeb / GDACS ticker (honest empty/ERR) |
+| Bottom | on | BBC World / ReliefWeb / GDACS + custom RSS ticker (honest empty/ERR) |
 
 Resize the inner edges. Hide with the × buttons or keys `1` `2` `3` `4`. Reset with the home icon.
+
+Selecting a catalog card or ticker headline opens an **in-depth center stage** (replacing the globe) with every field we already know. Selecting a hotspot or live point flies the globe into that locality, then opens a **map detail mode**. **← Globe** (or `Esc` / `b`) restores the globe and prior camera when we still have it.
 
 ## Keyboard
 
 | Key | Action |
 | --- | --- |
 | `/` | Focus catalog search |
-| `Esc` | Close help → close case notes → clear selection → clear query |
+| `Esc` | Close help → close case notes → back to globe → clear selection → clear query |
+| `b` | Back to globe from map / storm / depth |
 | `1` / `2` / `3` / `4` | Toggle left / right / top / bottom |
 | `n` | Case notes drawer |
 | `?` | Help overlay |
@@ -108,6 +113,8 @@ Resize the inner edges. Hide with the × buttons or keys `1` `2` `3` `4`. Reset 
 ## Globe layers
 
 Toggles in the status strip. Status is **LIVE**, **STALE**, **ERR**, or **OFF** — never invented points.
+
+Enabled layers **poll** (about every two minutes). Glowing globe highlights are driven by the latest live/stale points (USGS, EONET, ADS-B, NWS, AIS, FIRMS). Curated demo beacons stay as navigation only.
 
 | Layer | Source | Key |
 | --- | --- | --- |
@@ -121,6 +128,23 @@ Toggles in the status strip. Status is **LIVE**, **STALE**, **ERR**, or **OFF** 
 Demo **hotspots** (Kyiv, Hormuz, Suez, Taiwan Strait, etc.) are static geography for navigation. Clicking one opens a dossier of related catalog tools, not a live situation report.
 
 Dev and `vite preview` proxy `/proxy/*` so the browser can reach those APIs. Direct static file hosting without the Vite preview proxy will show **ERR** on layers/feeds that lack CORS — that is expected and honest.
+
+### Locality map
+
+`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot or live point transitions into a **MapLibre GL** detail view using the free [OpenFreeMap](https://openfreemap.org/) dark style (OpenMapTiles + OpenStreetMap). No basemap API key. Attribution: © OpenFreeMap © OpenMapTiles © OpenStreetMap contributors.
+
+If tiles fail, the map is empty — streets are never invented.
+
+### Storm map
+
+When a selected live point is **dangerous weather** (NWS event types or EONET severe-storms: hurricane / tropical cyclone, tornado, blizzard / winter storm, severe thunderstorm, flash flood), the center opens a storm map:
+
+- OpenFreeMap basemap
+- NWS alert geometry when the feed sent it
+- Optional [RainViewer](https://www.rainviewer.com/api.html) public radar mosaic (`/proxy/rainviewer`) — no key
+- Alert headline / area / severity only when present
+
+Radar **ERR** / empty leaves the alert text and geometry in place. Nothing is synthesized.
 
 ### Optional env keys
 
@@ -150,6 +174,12 @@ FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe s
 | `/proxy/bbc` | `https://feeds.bbci.co.uk` |
 | `/proxy/reliefweb` | `https://reliefweb.int` |
 | `/proxy/gdacs` | `https://www.gdacs.org` |
+| `/proxy/rainviewer` | `https://api.rainviewer.com` (public weather-maps.json) |
+| `/proxy/rss?url=` | Generic RSS/Atom fetch (`http`/`https` only) |
+
+## News ticker
+
+Built-in BBC World, ReliefWeb, and GDACS remain. The ⚙ control lets you enable/disable each and add **custom RSS/Atom** URLs (`http`/`https` only). Prefs persist in `omarchy-overwatch.feeds.v1`. Each feed shows **LIVE / STALE / ERR / OFF**. Click a headline to open the depth view (title, source, date, link — no fetched article body).
 
 ## Case notes
 
@@ -161,7 +191,7 @@ Local-only investigation scratchpad. Open with **n**, the **N** control in the s
 - Persist in `localStorage` key `omarchy-overwatch.cases.v1`
 - Export / import one case as JSON
 
-Overwatch never auto-fills notes or pins. Importing JSON creates a **new** case id so it will not silently overwrite another case.
+Overwatch OSINT for Omarchy never auto-fills notes or pins. Importing JSON creates a **new** case id so it will not silently overwrite another case.
 
 ## Catalog
 
@@ -173,7 +203,7 @@ Schema: `id, name, category, subcategory?, url, description, tags[], opsec, pric
 
 ## Stack
 
-Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · custom dock layout · dark glass HUD CSS.
+Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · MapLibre GL · custom dock layout · dark glass HUD CSS.
 
 ## Development notes
 
@@ -181,4 +211,4 @@ See [AGENTS.md](AGENTS.md) for contributor guidance.
 
 ## Acknowledgements
 
-Taxonomy inspired by [OSINT Framework](https://osintframework.com/) (`arf.json`) and the [Bellingcat toolkit](https://bellingcat.gitbook.io/toolkit). Live-layer ideas from public USGS / EONET / OpenSky / NWS documentation. HUD language nods to community OSINT dashboards without copying their code or inventing their data.
+Taxonomy inspired by [OSINT Framework](https://osintframework.com/) (`arf.json`) and the [Bellingcat toolkit](https://bellingcat.gitbook.io/toolkit). Live-layer ideas from public USGS / EONET / OpenSky / NWS documentation. Basemap: OpenFreeMap / OpenMapTiles / OpenStreetMap. Radar mosaic: RainViewer public API. HUD language nods to community OSINT dashboards without copying their code or inventing their data.

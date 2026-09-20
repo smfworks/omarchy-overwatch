@@ -9,9 +9,9 @@ type SimpleRes = {
   end: (chunk?: string) => void
 }
 
-type SimpleReq = { url?: string }
+type SimpleReq = { url?: string; method?: string }
 
-const UA = 'OmarchyOverwatch/1.0 (https://github.com/smfworks/omarchy-overwatch)'
+const UA = 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)'
 
 function sendJson(res: SimpleRes, status: number, body: unknown): void {
   res.statusCode = status
@@ -240,6 +240,46 @@ function collectAisSnapshot(apiKey: string, collectMs = 2600, maxUnique = 120): 
   })
 }
 
+function allowedRssTarget(raw: string | null): string | null {
+  if (!raw) return null
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  if (!parsed.hostname) return null
+  return parsed.href
+}
+
+async function proxyRss(req: SimpleReq, res: SimpleRes): Promise<void> {
+  const raw = req.url ?? ''
+  const q = raw.includes('?') ? new URL(raw, 'http://overwatch.local').searchParams.get('url') : null
+  const target = allowedRssTarget(q)
+  if (!target) {
+    sendJson(res, 400, { error: 'Only http/https RSS or Atom URLs are allowed. No headlines were invented.' })
+    return
+  }
+  try {
+    const upstream = await fetch(target, {
+      headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+      signal: AbortSignal.timeout(12_000),
+      redirect: 'follow',
+    })
+    const text = await upstream.text()
+    if (!upstream.ok) {
+      sendJson(res, upstream.status, { error: text.slice(0, 220) || `RSS HTTP ${upstream.status}` })
+      return
+    }
+    sendText(res, 200, text, upstream.headers.get('content-type') || 'application/xml; charset=utf-8')
+  } catch (err) {
+    sendJson(res, 502, {
+      error: err instanceof Error ? err.message : 'RSS proxy failed',
+    })
+  }
+}
+
 async function proxyFirmsApi(env: EnvMap, res: SimpleRes): Promise<void> {
   const key = env.FIRMS_MAP_KEY?.trim()
   if (!key) {
@@ -292,6 +332,10 @@ export function liveFeedsPlugin(env: EnvMap): Plugin {
       }
       if (url === '/proxy/firms/api/active') {
         await proxyFirmsApi(env, res)
+        return
+      }
+      if (url === '/proxy/rss') {
+        await proxyRss(req, res)
         return
       }
       next()

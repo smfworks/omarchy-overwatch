@@ -34,7 +34,7 @@ const proxy: Record<string, ProxyOptions> = {
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/proxy\/nws/, ''),
     headers: {
-      'User-Agent': 'OmarchyOverwatch/1.0 (https://github.com/smfworks/omarchy-overwatch)',
+      'User-Agent': 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)',
       Accept: 'application/geo+json',
     },
   },
@@ -43,8 +43,13 @@ const proxy: Record<string, ProxyOptions> = {
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/proxy\/firms/, ''),
     headers: {
-      'User-Agent': 'OmarchyOverwatch/1.0 (https://github.com/smfworks/omarchy-overwatch)',
+      'User-Agent': 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)',
     },
+  },
+  '/proxy/rainviewer': {
+    target: 'https://api.rainviewer.com',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/proxy\/rainviewer/, ''),
   },
 }
 

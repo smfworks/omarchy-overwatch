@@ -13,18 +13,31 @@ import {
 } from './cases/storage'
 import type { CaseStoreV1 } from './cases/types'
 import { type Hotspot } from './data/hotspots'
-import { fetchTicker, type FeedStatus, type TickerItem } from './feeds/rss'
-import { OverwatchGlobe } from './globe/OverwatchGlobe'
+import { fetchTicker, type FeedRuntime, type FeedStatus, type TickerItem } from './feeds/rss'
+import { loadFeedPrefs, saveFeedPrefs, sanitizeFeedPrefs, type FeedPrefsV1 } from './feeds/storage'
 import { classifyStatus, LAYER_DEFS, type GeoPoint, type LayerState } from './globe/layers'
 import { DockLayout } from './layout/DockLayout'
 import { loadLayout, saveLayout, sanitizeLayout, type LayoutState, type PanelId } from './layout/storage'
+import { isDangerousWeather } from './maps/weather'
 import { CaseNotesDrawer } from './panels/CaseNotesDrawer'
 import { CatalogPanel } from './panels/CatalogPanel'
 import { DetailPanel } from './panels/DetailPanel'
 import { HelpOverlay } from './panels/HelpOverlay'
 import { NewsTicker } from './panels/NewsTicker'
 import { StatusStrip } from './panels/StatusStrip'
-import { OverwatchContext, type Selection } from './state/context'
+import { CenterStage } from './stage/CenterStage'
+import {
+  OverwatchContext,
+  type CameraPov,
+  type Selection,
+  type StageMode,
+} from './state/context'
+
+const LAYER_POLL_MS = 120_000
+const LAYER_STALE_CHECK_MS = 30_000
+const TICKER_POLL_MS = 180_000
+const LOCALITY_ALTITUDE = 0.42
+const STAGE_AFTER_FLY_MS = 980
 
 function initialLayers(): LayerState[] {
   return LAYER_DEFS.map((def) => ({
@@ -47,11 +60,22 @@ function Provider({ children }: { children: ReactNode }) {
   const [ticker, setTicker] = useState<TickerItem[]>([])
   const [tickerStatus, setTickerStatus] = useState<FeedStatus>('loading')
   const [tickerError, setTickerError] = useState<string | null>(null)
+  const [tickerFeeds, setTickerFeeds] = useState<FeedRuntime[]>([])
+  const [feedPrefs, setFeedPrefsState] = useState<FeedPrefsV1>(() => loadFeedPrefs())
   const [helpOpen, setHelpOpen] = useState(false)
-  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; altitude: number } | null>(null)
+  const [flyTo, setFlyTo] = useState<CameraPov | null>(null)
+  const [stage, setStage] = useState<StageMode>('globe')
   const [caseStore, setCaseStoreState] = useState<CaseStoreV1>(() => loadCases())
   const [casesDrawerOpen, setCasesDrawerOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement | null>(null)
+  const layersRef = useRef(layers)
+  const globePovRef = useRef<CameraPov | null>(null)
+  const restorePovRef = useRef<CameraPov | null>(null)
+  const stageTimerRef = useRef<number>(0)
+  const selectionRef = useRef<Selection>(null)
+
+  layersRef.current = layers
+  selectionRef.current = selection
 
   const setLayout = useCallback((next: LayoutState | ((prev: LayoutState) => LayoutState)) => {
     setLayoutState((prev) => sanitizeLayout(typeof next === 'function' ? next(prev) : next))
@@ -69,6 +93,14 @@ function Provider({ children }: { children: ReactNode }) {
     saveCases(caseStore)
   }, [caseStore])
 
+  const setFeedPrefs = useCallback((next: FeedPrefsV1 | ((prev: FeedPrefsV1) => FeedPrefsV1)) => {
+    setFeedPrefsState((prev) => sanitizeFeedPrefs(typeof next === 'function' ? next(prev) : next))
+  }, [])
+
+  useEffect(() => {
+    saveFeedPrefs(feedPrefs)
+  }, [feedPrefs])
+
   const visibleTools = useMemo(() => filterTools(TOOLS, filters), [filters])
 
   const togglePanel = useCallback(
@@ -78,27 +110,98 @@ function Provider({ children }: { children: ReactNode }) {
     [setLayout],
   )
 
-  const selectTool = useCallback((tool: OsintTool | null) => {
-    setSelection(tool ? { kind: 'tool', tool } : null)
+  const reportGlobePov = useCallback((pov: CameraPov) => {
+    globePovRef.current = pov
   }, [])
 
-  const selectHotspot = useCallback((hotspot: Hotspot | null) => {
-    if (!hotspot) {
-      setSelection(null)
-      return
+  const openStage = useCallback((mode: StageMode) => {
+    window.clearTimeout(stageTimerRef.current)
+    if (mode !== 'globe' && !restorePovRef.current && globePovRef.current) {
+      restorePovRef.current = globePovRef.current
     }
-    setSelection({ kind: 'hotspot', hotspot })
-    setFlyTo({ lat: hotspot.lat, lng: hotspot.lng, altitude: 1.55 })
+    setStage(mode)
   }, [])
 
-  const selectPoint = useCallback((point: GeoPoint | null) => {
-    if (!point) {
-      setSelection(null)
-      return
-    }
-    setSelection({ kind: 'point', point })
-    setFlyTo({ lat: point.lat, lng: point.lng, altitude: 1.7 })
+  const goBack = useCallback(() => {
+    window.clearTimeout(stageTimerRef.current)
+    setStage('globe')
+    const pov = restorePovRef.current
+    restorePovRef.current = null
+    if (pov) setFlyTo({ ...pov })
   }, [])
+
+  const scheduleLocality = useCallback(
+    (target: CameraPov, mode: StageMode, key: string) => {
+      window.clearTimeout(stageTimerRef.current)
+      if (stage !== 'globe' && !restorePovRef.current && globePovRef.current) {
+        restorePovRef.current = globePovRef.current
+      }
+      setStage('globe')
+      setFlyTo(target)
+      stageTimerRef.current = window.setTimeout(() => {
+        const sel = selectionRef.current
+        const still =
+          (sel?.kind === 'hotspot' && sel.hotspot.id === key) ||
+          (sel?.kind === 'point' && sel.point.id === key)
+        if (still) {
+          if (!restorePovRef.current && globePovRef.current) restorePovRef.current = globePovRef.current
+          setStage(mode)
+        }
+      }, STAGE_AFTER_FLY_MS)
+    },
+    [stage],
+  )
+
+  const selectTool = useCallback(
+    (tool: OsintTool | null) => {
+      window.clearTimeout(stageTimerRef.current)
+      if (!tool) {
+        setSelection(null)
+        return
+      }
+      setSelection({ kind: 'tool', tool })
+      openStage('depth')
+    },
+    [openStage],
+  )
+
+  const selectHotspot = useCallback(
+    (hotspot: Hotspot | null) => {
+      if (!hotspot) {
+        setSelection(null)
+        return
+      }
+      setSelection({ kind: 'hotspot', hotspot })
+      scheduleLocality({ lat: hotspot.lat, lng: hotspot.lng, altitude: LOCALITY_ALTITUDE }, 'map', hotspot.id)
+    },
+    [scheduleLocality],
+  )
+
+  const selectPoint = useCallback(
+    (point: GeoPoint | null) => {
+      if (!point) {
+        setSelection(null)
+        return
+      }
+      setSelection({ kind: 'point', point })
+      const mode: StageMode = isDangerousWeather(point) ? 'storm' : 'map'
+      scheduleLocality({ lat: point.lat, lng: point.lng, altitude: LOCALITY_ALTITUDE }, mode, point.id)
+    },
+    [scheduleLocality],
+  )
+
+  const selectTicker = useCallback(
+    (item: TickerItem | null) => {
+      window.clearTimeout(stageTimerRef.current)
+      if (!item) {
+        setSelection(null)
+        return
+      }
+      setSelection({ kind: 'ticker', item })
+      openStage('depth')
+    },
+    [openStage],
+  )
 
   const loadLayer = useCallback(async (id: string) => {
     const def = LAYER_DEFS.find((d) => d.id === id)
@@ -158,10 +261,10 @@ function Provider({ children }: { children: ReactNode }) {
   )
 
   const refreshLayers = useCallback(() => {
-    for (const layer of layers) {
+    for (const layer of layersRef.current) {
       if (layer.enabled) void loadLayer(layer.id)
     }
-  }, [layers, loadLayer])
+  }, [loadLayer])
 
   useEffect(() => {
     void loadLayer('earthquakes')
@@ -169,29 +272,70 @@ function Provider({ children }: { children: ReactNode }) {
   }, [loadLayer])
 
   useEffect(() => {
-    let cancelled = false
-    fetchTicker()
-      .then(({ items, errors }) => {
-        if (cancelled) return
+    const poll = window.setInterval(() => {
+      for (const layer of layersRef.current) {
+        if (layer.enabled) void loadLayer(layer.id)
+      }
+    }, LAYER_POLL_MS)
+    const stale = window.setInterval(() => {
+      setLayers((prev) =>
+        prev.map((l) =>
+          l.enabled
+            ? {
+                ...l,
+                status: classifyStatus({
+                  enabled: l.enabled,
+                  updatedAt: l.updatedAt,
+                  error: l.error,
+                  points: l.points,
+                }),
+              }
+            : l,
+        ),
+      )
+    }, LAYER_STALE_CHECK_MS)
+    return () => {
+      window.clearInterval(poll)
+      window.clearInterval(stale)
+    }
+  }, [loadLayer])
+
+  useEffect(() => {
+    if (selection?.kind !== 'point') return
+    for (const layer of layers) {
+      const pt = layer.points.find((p) => p.id === selection.point.id)
+      if (pt && (pt.extra !== selection.point.extra || pt.headline !== selection.point.headline || pt.lat !== selection.point.lat)) {
+        setSelection({ kind: 'point', point: pt })
+        return
+      }
+    }
+  }, [layers, selection])
+
+  const loadTicker = useCallback(() => {
+    fetchTicker(feedPrefs)
+      .then(({ items, errors, feeds }) => {
+        setTickerFeeds(feeds)
         if (!items.length) {
           setTicker([])
-          setTickerStatus(errors.length ? 'err' : 'empty')
+          setTickerStatus(errors.length ? 'err' : feeds.some((f) => f.enabled) ? 'empty' : 'off')
           setTickerError(errors.join(' · ') || null)
           return
         }
         setTicker(items)
-        setTickerStatus('live')
+        setTickerStatus(errors.length ? 'stale' : 'live')
         setTickerError(errors.length ? errors.join(' · ') : null)
       })
       .catch((err: unknown) => {
-        if (cancelled) return
         setTickerStatus('err')
         setTickerError(err instanceof Error ? err.message : 'feed failed')
       })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  }, [feedPrefs])
+
+  useEffect(() => {
+    loadTicker()
+    const id = window.setInterval(loadTicker, TICKER_POLL_MS)
+    return () => window.clearInterval(id)
+  }, [loadTicker])
 
   const pinSelection = useCallback(() => {
     setCaseStore((prev) => {
@@ -207,7 +351,7 @@ function Provider({ children }: { children: ReactNode }) {
       const rec = activeCase(prev) ?? createEmptyCase('Untitled case')
       return upsertCase(prev, addPin(rec, pin))
     })
-    if (selection) setCasesDrawerOpen(true)
+    if (selection && selection.kind !== 'ticker') setCasesDrawerOpen(true)
   }, [selection, setCaseStore])
 
   const focusSearch = useCallback(() => {
@@ -237,6 +381,10 @@ function Provider({ children }: { children: ReactNode }) {
           setCasesDrawerOpen(false)
           return
         }
+        if (stage !== 'globe') {
+          goBack()
+          return
+        }
         if (selection) {
           setSelection(null)
           return
@@ -248,6 +396,10 @@ function Provider({ children }: { children: ReactNode }) {
         target?.blur?.()
       }
       if (typing) return
+      if ((e.key === 'b' || e.key === 'B') && stage !== 'globe') {
+        e.preventDefault()
+        goBack()
+      }
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
         setCasesDrawerOpen((v) => !v)
@@ -259,7 +411,7 @@ function Provider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [casesDrawerOpen, filters.query, focusSearch, helpOpen, selection, togglePanel])
+  }, [casesDrawerOpen, filters.query, focusSearch, goBack, helpOpen, selection, stage, togglePanel])
 
   const value = {
     layout,
@@ -272,17 +424,26 @@ function Provider({ children }: { children: ReactNode }) {
     selectTool,
     selectHotspot,
     selectPoint,
+    selectTicker,
     layers,
     toggleLayer,
     refreshLayers,
     ticker,
     tickerStatus,
     tickerError,
+    tickerFeeds,
+    feedPrefs,
+    setFeedPrefs,
+    refreshTicker: loadTicker,
     helpOpen,
     setHelpOpen,
     searchRef,
     focusSearch,
     flyTo,
+    stage,
+    openStage,
+    goBack,
+    reportGlobePov,
     caseStore,
     setCaseStore,
     casesDrawerOpen,
@@ -302,7 +463,7 @@ export default function App() {
           left={<CatalogPanel />}
           right={<DetailPanel />}
           bottom={<NewsTicker />}
-          center={<OverwatchGlobe />}
+          center={<CenterStage />}
         />
         <HelpOverlay />
         <CaseNotesDrawer />

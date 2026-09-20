@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Start the Overwatch preview server if needed, then open the HUD as an Omarchy web app.
+# Start the Overwatch OSINT for Omarchy preview server if needed, then open the HUD.
+# Product name: Overwatch OSINT for Omarchy. CLI remains omarchy-overwatch.
 set -euo pipefail
 OW_ROOT="${OW_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PORT="${OW_PORT:-4173}"
 URL="http://127.0.0.1:${PORT}"
-# Window class / focus pattern — matches Chromium --app= and page title "Omarchy Overwatch".
+# Window class / focus pattern — Chromium --app= class. Title is "Overwatch OSINT for Omarchy".
 APP_CLASS="Overwatch"
 
 cd "${OW_ROOT}"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install Omarchy Overwatch for a local user (Omarchy / Arch).
+# Install Overwatch OSINT for Omarchy for a local user (Omarchy / Arch).
+# Product name: Overwatch OSINT for Omarchy. CLI / install path remain omarchy-overwatch.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,7 +9,7 @@ BIN_DIR="${HOME}/.local/bin"
 APP_DIR="${HOME}/.local/share/applications"
 ICON_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
 
-echo "==> Omarchy Overwatch install"
+echo "==> Overwatch OSINT for Omarchy install"
 echo "    source: ${SRC}"
 echo "    dest:   ${DEST}"
 
@@ -45,8 +46,8 @@ cat > "${DESKTOP}" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Omarchy Overwatch
-Comment=Public-source OSINT workbench
+Name=Overwatch OSINT for Omarchy
+Comment=Public-source OSINT HUD (CLI: omarchy-overwatch)
 Exec=${BIN_DIR}/omarchy-overwatch
 Icon=omarchy-overwatch
 Terminal=false
