@@ -80,7 +80,7 @@ export function DockLayout({
         {layout.left ? (
           <div className="panel panel-left" style={{ height: '100%' }}>
             <Handle axis="x" attr="leftWidth" />
-            <button className="icon-btn" style={{ position: 'absolute', right: 8, top: 8, zIndex: 2 }} onClick={() => hide('left')} title="Hide catalog">
+            <button className="icon-btn panel-close" onClick={() => hide('left')} title="Hide catalog">
               ×
             </button>
             {left}
@@ -92,7 +92,7 @@ export function DockLayout({
         {layout.right ? (
           <div className="panel panel-right" style={{ height: '100%' }}>
             <Handle axis="x" attr="rightWidth" />
-            <button className="icon-btn" style={{ position: 'absolute', left: 8, top: 8, zIndex: 2 }} onClick={() => hide('right')} title="Hide dossier">
+            <button className="icon-btn panel-close" onClick={() => hide('right')} title="Hide dossier">
               ×
             </button>
             {right}

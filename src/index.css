@@ -289,11 +289,18 @@ a {
   border-color: var(--cyan);
 }
 
+.panel-close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
+}
+
 .panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 8px;
+  padding: 10px 40px 8px 12px;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
   font-size: 11px;
