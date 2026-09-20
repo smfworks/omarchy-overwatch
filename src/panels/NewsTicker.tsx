@@ -50,7 +50,7 @@ export function NewsTicker() {
         title="Custom RSS / enable feeds"
         onClick={() => setOpen((v) => !v)}
       >
-        ⚙
+        ⚙ RSS
       </button>
       <div className="ticker-main">
         {tickerStatus === 'loading' && <div className="ticker-msg">Fetching public RSS…</div>}

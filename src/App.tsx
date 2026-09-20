@@ -111,6 +111,8 @@ function Provider({ children }: { children: ReactNode }) {
   )
 
   const reportGlobePov = useCallback((pov: CameraPov) => {
+    if (!Number.isFinite(pov.lat) || !Number.isFinite(pov.lng) || !Number.isFinite(pov.altitude)) return
+    if (pov.altitude <= 0) return
     globePovRef.current = pov
   }, [])
 
@@ -374,14 +376,18 @@ function Provider({ children }: { children: ReactNode }) {
       }
       if (e.key === 'Escape') {
         if (helpOpen) {
+          e.preventDefault()
           setHelpOpen(false)
           return
         }
         if (casesDrawerOpen) {
+          e.preventDefault()
           setCasesDrawerOpen(false)
           return
         }
         if (stage !== 'globe') {
+          e.preventDefault()
+          e.stopPropagation()
           goBack()
           return
         }
@@ -398,6 +404,7 @@ function Provider({ children }: { children: ReactNode }) {
       if (typing) return
       if ((e.key === 'b' || e.key === 'B') && stage !== 'globe') {
         e.preventDefault()
+        e.stopPropagation()
         goBack()
       }
       if (e.key === 'n' || e.key === 'N') {
@@ -409,8 +416,8 @@ function Provider({ children }: { children: ReactNode }) {
       if (e.key === '3') togglePanel('top')
       if (e.key === '4') togglePanel('bottom')
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [casesDrawerOpen, filters.query, focusSearch, goBack, helpOpen, selection, stage, togglePanel])
 
   const value = {

@@ -23,6 +23,7 @@ export function StormMap({ point }: { point: GeoPoint }) {
       style: OPENFREEMAP_DARK,
       center: [point.lng, point.lat],
       zoom: 6.4,
+      keyboard: false,
       attributionControl: {
         compact: true,
         customAttribution: `${BASEMAP_ATTRIBUTION} · radar RainViewer`,
@@ -99,7 +100,11 @@ export function StormMap({ point }: { point: GeoPoint }) {
 
     return () => {
       cancelled = true
-      map.remove()
+      try {
+        map.remove()
+      } catch {
+        /* MapLibre can throw if the WebGL context was already lost */
+      }
     }
   }, [point])
 

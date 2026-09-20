@@ -44,9 +44,11 @@ export function CenterStage() {
       <span className="corner tr" />
       <span className="corner bl" />
       <span className="corner br" />
-      <div className={`stage-globe${stage === 'globe' ? '' : ' is-hidden'}`} data-hidden={stage !== 'globe'}>
-        <OverwatchGlobe />
-      </div>
+      {stage === 'globe' ? (
+        <div className="stage-globe">
+          <OverwatchGlobe />
+        </div>
+      ) : null}
       {stage === 'map' && geo && (
         <LocalityMap
           lat={geo.lat}
@@ -60,7 +62,7 @@ export function CenterStage() {
       {stage === 'depth' && <DepthView />}
       {stage !== 'globe' && (
         <div className="stage-chrome">
-          <button className="btn stage-back" onClick={goBack} title="Back to globe (Esc)">
+          <button type="button" className="btn stage-back" onClick={goBack} title="Back to globe (Esc or b)">
             ← Globe
           </button>
           <div className="stage-title">{stageTitle(stage, label)}</div>

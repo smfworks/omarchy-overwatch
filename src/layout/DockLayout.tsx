@@ -87,7 +87,7 @@ export function DockLayout({
           </div>
         ) : null}
       </div>
-      <div style={{ gridColumn: 2, gridRow: 2, minWidth: 0, minHeight: 0 }}>{center}</div>
+      <div style={{ gridColumn: 2, gridRow: 2, minWidth: 0, minHeight: 0, height: '100%' }}>{center}</div>
       <div style={{ gridColumn: 3, gridRow: 2, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
         {layout.right ? (
           <div className="panel panel-right" style={{ height: '100%' }}>

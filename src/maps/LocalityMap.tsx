@@ -27,6 +27,7 @@ export function LocalityMap({
       style: OPENFREEMAP_DARK,
       center: [lng, lat],
       zoom: 10.2,
+      keyboard: false,
       attributionControl: { compact: true, customAttribution: BASEMAP_ATTRIBUTION },
     })
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
@@ -79,8 +80,12 @@ export function LocalityMap({
     })
 
     return () => {
-      marker.remove()
-      map.remove()
+      try {
+        marker.remove()
+        map.remove()
+      } catch {
+        /* MapLibre can throw if the WebGL context was already lost */
+      }
     }
   }, [lat, lng, label, geometry, markerColor])
 

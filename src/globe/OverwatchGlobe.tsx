@@ -45,6 +45,9 @@ export function OverwatchGlobe() {
     return () => ro.disconnect()
   }, [])
 
+  const flyToRef = useRef(flyTo)
+  flyToRef.current = flyTo
+
   useEffect(() => {
     if (flyTo) globeRef.current?.pointOfView(flyTo, 900)
   }, [flyTo])
@@ -165,7 +168,8 @@ export function OverwatchGlobe() {
             controls.autoRotateSpeed = 0.28
             controls.enableDamping = true
           }
-          globeRef.current?.pointOfView({ lat: 18, lng: 25, altitude: 2.4 }, 0)
+          const resume = flyToRef.current
+          globeRef.current?.pointOfView(resume ?? { lat: 18, lng: 25, altitude: 2.4 }, 0)
         }}
         onGlobeClick={({ lat, lng }: { lat: number; lng: number }) => {
           const hs = nearestHotspot(lat, lng)
