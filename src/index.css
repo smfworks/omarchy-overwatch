@@ -632,6 +632,37 @@ a {
   line-height: 1.45;
 }
 
+.beacon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--cyan);
+  background: rgba(62, 224, 200, 0.35);
+  box-shadow: 0 0 14px rgba(62, 224, 200, 0.85);
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  padding: 0;
+}
+
+.beacon.chokepoint {
+  border-color: var(--amber);
+  background: rgba(232, 184, 74, 0.4);
+  box-shadow: 0 0 14px rgba(232, 184, 74, 0.85);
+}
+
+.beacon.hazard-watch {
+  border-color: var(--red);
+  background: rgba(255, 93, 108, 0.4);
+  box-shadow: 0 0 14px rgba(255, 93, 108, 0.85);
+}
+
+.beacon:hover,
+.beacon:focus-visible {
+  width: 22px;
+  height: 22px;
+  outline: none;
+}
+
 .globe-hint {
   position: absolute;
   left: 16px;

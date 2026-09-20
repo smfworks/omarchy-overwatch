@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'react-globe.gl'
 import type { GlobeMethods } from 'react-globe.gl'
 import { HOTSPOTS } from '../data/hotspots'
@@ -16,7 +16,7 @@ interface Marker {
   name: string
   color: string
   size: number
-  kind: 'hotspot' | GeoPoint['kind']
+  kind: GeoPoint['kind']
 }
 
 export function OverwatchGlobe() {
@@ -39,17 +39,8 @@ export function OverwatchGlobe() {
     if (flyTo) globeRef.current?.pointOfView(flyTo, 900)
   }, [flyTo])
 
-  const markers = useMemo<Marker[]>(() => {
-    const hs: Marker[] = HOTSPOTS.map((h) => ({
-      id: `hs-${h.id}`,
-      lat: h.lat,
-      lng: h.lng,
-      name: h.name,
-      color: h.kind === 'chokepoint' ? '#e8b84a' : h.kind === 'hazard-watch' ? '#ff5d6c' : '#3ee0c8',
-      size: 0.55,
-      kind: 'hotspot',
-    }))
-    const live: Marker[] = layers.flatMap((layer) =>
+  const liveMarkers = useMemo<Marker[]>(() => {
+    return layers.flatMap((layer) =>
       layer.enabled && (layer.status === 'live' || layer.status === 'stale')
         ? layer.points.map((p) => ({
             id: p.id,
@@ -69,20 +60,36 @@ export function OverwatchGlobe() {
           }))
         : [],
     )
-    return [...hs, ...live]
   }, [layers])
+
+  const makeBeacon = useCallback(
+    (obj: object) => {
+      const hs = obj as (typeof HOTSPOTS)[number]
+      const el = document.createElement('button')
+      el.type = 'button'
+      el.className = `beacon ${hs.kind}`
+      el.title = hs.name
+      el.setAttribute('aria-label', hs.name)
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        selectHotspot(hs)
+      })
+      return el
+    },
+    [selectHotspot],
+  )
 
   const rings = useMemo(
     () =>
-      markers
-        .filter((m) => m.kind === 'quake' || m.kind === 'hotspot')
+      liveMarkers
+        .filter((m) => m.kind === 'quake')
         .map((m) => ({
           lat: m.lat,
           lng: m.lng,
-          maxR: m.kind === 'quake' ? 3.5 : 2.2,
+          maxR: 3.5,
           color: m.color,
         })),
-    [markers],
+    [liveMarkers],
   )
 
   return (
@@ -101,13 +108,18 @@ export function OverwatchGlobe() {
         atmosphereColor="#3ee0c8"
         atmosphereAltitude={0.18}
         backgroundColor="#02040a"
-        pointsData={markers}
+        pointsData={liveMarkers}
         pointLat="lat"
         pointLng="lng"
         pointAltitude={0.01}
         pointRadius="size"
         pointColor="color"
         pointLabel={(d: object) => (d as Marker).name}
+        htmlElementsData={HOTSPOTS}
+        htmlLat="lat"
+        htmlLng="lng"
+        htmlAltitude={0.02}
+        htmlElement={makeBeacon}
         onGlobeReady={() => {
           const controls = globeRef.current?.controls()
           if (controls) {
@@ -119,11 +131,6 @@ export function OverwatchGlobe() {
         }}
         onPointClick={(d: object) => {
           const m = d as Marker
-          if (m.kind === 'hotspot') {
-            const hs = HOTSPOTS.find((h) => `hs-${h.id}` === m.id)
-            if (hs) selectHotspot(hs)
-            return
-          }
           for (const layer of layers) {
             const pt = layer.points.find((p) => p.id === m.id)
             if (pt) {

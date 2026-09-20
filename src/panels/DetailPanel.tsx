@@ -16,9 +16,18 @@ export function DetailPanel() {
         <div className="panel-head">Dossier</div>
         <div className="panel-body">
           <div className="empty">
-            Select a catalog card or a globe hotspot. Overwatch is a public-source launcher — it does not collect
+            Select a catalog card or a globe beacon. Overwatch is a public-source launcher — it does not collect
             targets or invent intelligence.
           </div>
+          <div className="count-line">Demo beacons</div>
+          {HOTSPOTS.map((hs) => (
+            <button key={hs.id} className="tool-card" onClick={() => selectHotspot(hs)}>
+              <h3>{hs.name}</h3>
+              <p>
+                {hs.lat.toFixed(2)}°, {hs.lng.toFixed(2)}° · {hs.kind}
+              </p>
+            </button>
+          ))}
         </div>
       </>
     )
