@@ -1,0 +1,9 @@
+{
+  "source": "aisstream",
+  "vessels": [
+    { "mmsi": "367719770", "name": "EXAMPLE STAR", "lat": 25.77, "lng": -80.13, "extra": "PositionReport · MMSI 367719770" },
+    { "mmsi": "211476060", "name": "  ", "lat": 1.26, "lng": 103.84, "extra": "PositionReport · MMSI 211476060" },
+    { "mmsi": "bad", "name": "NOWHERE", "lat": 91, "lng": 0 },
+    { "name": "no-coords" }
+  ]
+}
