@@ -1,0 +1,31 @@
+{
+  "name": "omarchy-overwatch",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Configurable OSINT intelligence dashboard for Omarchy Linux",
+  "author": "SMF Works",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-globe.gl": "^2.35.0",
+    "three": "^0.179.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@types/three": "^0.179.0",
+    "@vitejs/plugin-react": "^5.0.2",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
+  }
+}
