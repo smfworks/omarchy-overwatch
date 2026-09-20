@@ -4,8 +4,10 @@ set -euo pipefail
 OW_ROOT="${OW_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PORT="${OW_PORT:-4173}"
 URL="http://127.0.0.1:${PORT}"
-# Window class / focus pattern — matches Chromium --app= and page title "Omarchy Overwatch".
-APP_CLASS="Overwatch"
+# Focus pattern for omarchy-launch-or-focus-webapp. This matches the page TITLE:
+# Chromium on Wayland ignores --class and always derives its app_id from the URL
+# (chrome-127.0.0.1__-Default), so the window class cannot be set from here.
+APP_WINDOW_PATTERN="Overwatch"
 
 cd "${OW_ROOT}"
 
@@ -39,17 +41,17 @@ fi
 # Omarchy web app (chrome-free --app= window), then Chromium/Chrome --app=, then xdg-open.
 open_hud() {
   if command -v omarchy-launch-or-focus-webapp >/dev/null 2>&1; then
-    omarchy-launch-or-focus-webapp "${APP_CLASS}" "${URL}" --class="${APP_CLASS}" >/dev/null 2>&1 || true
+    omarchy-launch-or-focus-webapp "${APP_WINDOW_PATTERN}" "${URL}" >/dev/null 2>&1 || true
     return
   fi
   if command -v omarchy-launch-webapp >/dev/null 2>&1; then
-    omarchy-launch-webapp "${URL}" --class="${APP_CLASS}" >/dev/null 2>&1 || true
+    omarchy-launch-webapp "${URL}" >/dev/null 2>&1 || true
     return
   fi
   local bin
   for bin in chromium google-chrome google-chrome-stable chromium-browser; do
     if command -v "${bin}" >/dev/null 2>&1; then
-      nohup "${bin}" --app="${URL}" --class="${APP_CLASS}" >/dev/null 2>&1 &
+      nohup "${bin}" --app="${URL}" >/dev/null 2>&1 &
       return
     fi
   done

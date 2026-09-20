@@ -82,6 +82,44 @@ Dependencies on Arch/Omarchy:
 sudo pacman -S --needed git nodejs npm chromium xdg-utils
 ```
 
+## Remote access (tailnet / reverse proxy)
+
+Overwatch binds to `127.0.0.1` and is **not** reachable from your LAN or the
+internet by default. Keep it that way: `/proxy/*` forwards to live upstream APIs
+with your keys attached, so anything that can reach Overwatch can spend your
+OpenSky/FIRMS/AISStream quota.
+
+To use the HUD from another machine, put a proxy in front of the loopback
+server rather than widening the bind address. One catch: Vite rejects requests
+whose `Host` header it does not recognise, and most proxies preserve the
+original Host — so the hostname must be allowlisted.
+
+```bash
+# In the install directory's .env (gitignored):
+OW_ALLOWED_HOSTS=myhost.tailnet-name.ts.net
+```
+
+Keep the preview server up independently of the desktop launcher:
+
+```bash
+./scripts/install.sh --service     # systemd --user unit, starts with your session
+```
+
+Then front it. With [Tailscale](https://tailscale.com/) this is tailnet-only
+HTTPS with no ports opened and no certificate work:
+
+```bash
+sudo tailscale serve --bg --https=443 http://127.0.0.1:4173
+tailscale serve status            # should say "tailnet only"
+```
+
+The same `OW_ALLOWED_HOSTS` entry works for Caddy, nginx, or any other reverse
+proxy that passes the original Host through.
+
+> **Do not use `tailscale funnel`** (or any public reverse proxy) for Overwatch.
+> Funnel publishes to the open internet, which would expose your live-feed
+> proxies and API keys to anyone with the URL.
+
 ## Layout
 
 Docks persist in `localStorage` (`omarchy-overwatch.layout.v1`):

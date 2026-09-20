@@ -58,8 +58,13 @@ export default defineConfig(({ mode }) => {
       proxy,
     },
     preview: {
-      host: '127.0.0.1',
+      host: env.OW_PREVIEW_HOST || '127.0.0.1',
       port: 4173,
+      // Allow reverse proxies (e.g. `tailscale serve`) that preserve the
+      // original Host header. Comma-separated hostnames, no wildcard default.
+      allowedHosts: env.OW_ALLOWED_HOSTS
+        ? env.OW_ALLOWED_HOSTS.split(',').map((h) => h.trim()).filter(Boolean)
+        : undefined,
       proxy,
     },
     test: {
