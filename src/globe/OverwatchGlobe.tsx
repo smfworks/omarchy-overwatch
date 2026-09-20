@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'react-globe.gl'
 import type { GlobeMethods } from 'react-globe.gl'
-import { HOTSPOTS } from '../data/hotspots'
+import { HOTSPOTS, nearestHotspot } from '../data/hotspots'
 import { useOverwatch } from '../state/context'
 import type { GeoPoint } from './layers'
 
@@ -70,6 +70,7 @@ export function OverwatchGlobe() {
       el.className = `beacon ${hs.kind}`
       el.title = hs.name
       el.setAttribute('aria-label', hs.name)
+      el.style.pointerEvents = 'auto'
       el.addEventListener('click', (ev) => {
         ev.stopPropagation()
         selectHotspot(hs)
@@ -128,6 +129,10 @@ export function OverwatchGlobe() {
             controls.enableDamping = true
           }
           globeRef.current?.pointOfView({ lat: 18, lng: 25, altitude: 2.4 }, 0)
+        }}
+        onGlobeClick={({ lat, lng }: { lat: number; lng: number }) => {
+          const hs = nearestHotspot(lat, lng)
+          if (hs) selectHotspot(hs)
         }}
         onPointClick={(d: object) => {
           const m = d as Marker

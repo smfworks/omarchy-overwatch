@@ -199,3 +199,23 @@ export const HOTSPOTS: Hotspot[] = [
     links: [{ label: 'Liveuamap', url: 'https://liveuamap.com/' }],
   },
 ]
+
+export function angularDistance(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const dlat = aLat - bLat
+  const raw = Math.abs(aLng - bLng)
+  const dlng = Math.min(raw, 360 - raw)
+  return Math.hypot(dlat, dlng)
+}
+
+export function nearestHotspot(lat: number, lng: number, maxDeg = 6): Hotspot | null {
+  let best: Hotspot | null = null
+  let bestD = Infinity
+  for (const h of HOTSPOTS) {
+    const d = angularDistance(lat, lng, h.lat, h.lng)
+    if (d < bestD) {
+      bestD = d
+      best = h
+    }
+  }
+  return best && bestD <= maxDeg ? best : null
+}
