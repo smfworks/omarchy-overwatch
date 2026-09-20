@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LngLatBounds, Map, Marker, NavigationControl, Popup } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { FeedGeometry } from '../globe/types'
 import { BASEMAP_ATTRIBUTION, OPENFREEMAP_DARK } from './basemap'
+import { OsmFallback } from './OsmFallback'
 
 export function LocalityMap({
   lat,
@@ -18,17 +19,28 @@ export function LocalityMap({
   markerColor?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [failed, setFailed] = useState<string | null>(null)
 
   useEffect(() => {
     const el = ref.current
-    if (!el) return
-    const map = new Map({
-      container: el,
-      style: OPENFREEMAP_DARK,
-      center: [lng, lat],
-      zoom: 10.2,
-      keyboard: false,
-      attributionControl: { compact: true, customAttribution: BASEMAP_ATTRIBUTION },
+    if (!el || failed) return
+    let map: Map
+    try {
+      map = new Map({
+        container: el,
+        style: OPENFREEMAP_DARK,
+        center: [lng, lat],
+        zoom: 10.2,
+        keyboard: false,
+        attributionControl: { compact: true, customAttribution: BASEMAP_ATTRIBUTION },
+      })
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : 'MapLibre failed to start')
+      return
+    }
+    map.on('error', (ev) => {
+      const msg = ev.error instanceof Error ? ev.error.message : 'map error'
+      if (/webgl|context/i.test(msg)) setFailed(msg)
     })
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
     const marker = new Marker({ color: markerColor }).setLngLat([lng, lat]).addTo(map)
@@ -87,7 +99,11 @@ export function LocalityMap({
         /* MapLibre can throw if the WebGL context was already lost */
       }
     }
-  }, [lat, lng, label, geometry, markerColor])
+  }, [lat, lng, label, geometry, markerColor, failed])
+
+  if (failed) {
+    return <OsmFallback lat={lat} lng={lng} label={label} />
+  }
 
   return <div ref={ref} className="locality-map" role="region" aria-label={`Locality map: ${label}`} />
 }

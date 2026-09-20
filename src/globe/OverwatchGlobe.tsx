@@ -29,11 +29,24 @@ function colorFor(kind: GeoPoint['kind']): string {
   return '#3ee0c8'
 }
 
+function webglAvailable(): boolean {
+  try {
+    const c = document.createElement('canvas')
+    const gl = c.getContext('webgl2') || c.getContext('webgl')
+    if (!gl) return false
+    gl.getExtension('WEBGL_lose_context')?.loseContext()
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function OverwatchGlobe() {
   const { layers, selectHotspot, selectPoint, flyTo, selection, reportGlobePov, stage } = useOverwatch()
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [dims, setDims] = useState({ width: 800, height: 600 })
+  const [webgl] = useState(webglAvailable)
 
   useEffect(() => {
     const el = wrapRef.current
@@ -136,6 +149,19 @@ export function OverwatchGlobe() {
   }, [liveMarkers, selection])
 
   const liveCount = liveMarkers.length
+
+  if (!webgl) {
+    return (
+      <div className="globe-inner globe-fallback" ref={wrapRef}>
+        <p>Globe WebGL is unavailable in this session. Catalog, ticker, and dossier still work. No geodata was invented.</p>
+        <p className="disclaimer">
+          {liveCount
+            ? `${liveCount} live layer points are loaded — open them from the right dossier for locality / storm maps.`
+            : 'Enable a live layer in the status strip to list points in the dossier.'}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="globe-inner" ref={wrapRef}>

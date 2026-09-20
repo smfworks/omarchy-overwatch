@@ -3,6 +3,7 @@ import { Map, Marker, NavigationControl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { GeoPoint } from '../globe/types'
 import { BASEMAP_ATTRIBUTION, OPENFREEMAP_DARK, fetchRainViewerMaps, rainviewerTileUrl } from './basemap'
+import { OsmFallback } from './OsmFallback'
 import { weatherKindLabel } from './weather'
 
 type RadarState = 'loading' | 'live' | 'err' | 'empty'
@@ -14,20 +15,35 @@ export function StormMap({ point }: { point: GeoPoint }) {
     error: null,
     time: null,
   })
+  const [mapFailed, setMapFailed] = useState<string | null>(null)
 
   useEffect(() => {
     const el = ref.current
-    if (!el) return
-    const map = new Map({
-      container: el,
-      style: OPENFREEMAP_DARK,
-      center: [point.lng, point.lat],
-      zoom: 6.4,
-      keyboard: false,
-      attributionControl: {
-        compact: true,
-        customAttribution: `${BASEMAP_ATTRIBUTION} · radar RainViewer`,
-      },
+    if (!el || mapFailed) return
+    let map: Map
+    try {
+      map = new Map({
+        container: el,
+        style: OPENFREEMAP_DARK,
+        center: [point.lng, point.lat],
+        zoom: 6.4,
+        keyboard: false,
+        attributionControl: {
+          compact: true,
+          customAttribution: `${BASEMAP_ATTRIBUTION} · radar RainViewer`,
+        },
+      })
+    } catch (err) {
+      setMapFailed(err instanceof Error ? err.message : 'MapLibre failed to start')
+      setRadar({ status: 'err', error: 'WebGL map unavailable', time: null })
+      return
+    }
+    map.on('error', (ev) => {
+      const msg = ev.error instanceof Error ? ev.error.message : 'map error'
+      if (/webgl|context/i.test(msg)) {
+        setMapFailed(msg)
+        setRadar({ status: 'err', error: msg, time: null })
+      }
     })
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
     new Marker({ color: '#ff5d6c' }).setLngLat([point.lng, point.lat]).addTo(map)
@@ -106,11 +122,15 @@ export function StormMap({ point }: { point: GeoPoint }) {
         /* MapLibre can throw if the WebGL context was already lost */
       }
     }
-  }, [point])
+  }, [point, mapFailed])
 
   return (
     <div className="storm-map-wrap">
-      <div ref={ref} className="locality-map" role="region" aria-label={`Storm map: ${weatherKindLabel(point)}`} />
+      {mapFailed ? (
+        <OsmFallback lat={point.lat} lng={point.lng} zoom={7} label={weatherKindLabel(point)} />
+      ) : (
+        <div ref={ref} className="locality-map" role="region" aria-label={`Storm map: ${weatherKindLabel(point)}`} />
+      )}
       <aside className="storm-dossier" aria-live="polite">
         <div className="storm-kicker">
           Dangerous weather
