@@ -1,4 +1,5 @@
 [Desktop Entry]
+Version=1.0
 Type=Application
 Name=Omarchy Overwatch
 Comment=Public-source OSINT workbench for Omarchy Linux
@@ -7,4 +8,5 @@ Icon=omarchy-overwatch
 Terminal=false
 Categories=Network;Security;Utility;
 StartupNotify=true
+StartupWMClass=Overwatch
 Keywords=OSINT;intelligence;globe;catalog;

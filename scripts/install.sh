@@ -35,9 +35,15 @@ sed -i "s|^OW_ROOT=.*|OW_ROOT=\"${DEST}\"|" "${BIN_DIR}/omarchy-overwatch"
 
 install -m 0644 "${DEST}/public/favicon.svg" "${ICON_DIR}/omarchy-overwatch.svg"
 
+# Keep Exec pointing at the launcher binary so preview starts before the HUD.
+# Do not call omarchy-webapp-install: its default Exec is
+# `omarchy-launch-webapp $URL`, which would skip the Vite preview server.
+# Custom Exec is supported there, but would write a second .desktop named
+# after the display name. This file is the single launcher.
 DESKTOP="${APP_DIR}/omarchy-overwatch.desktop"
 cat > "${DESKTOP}" <<EOF
 [Desktop Entry]
+Version=1.0
 Type=Application
 Name=Omarchy Overwatch
 Comment=Public-source OSINT workbench
@@ -46,6 +52,7 @@ Icon=omarchy-overwatch
 Terminal=false
 Categories=Network;Security;Utility;
 StartupNotify=true
+StartupWMClass=Overwatch
 EOF
 
 if command -v update-desktop-database >/dev/null; then
@@ -55,4 +62,4 @@ fi
 echo "==> Installed."
 echo "    Launch: omarchy-overwatch"
 echo "    Or:     gtk-launch omarchy-overwatch"
-echo "    HUD:    http://127.0.0.1:4173"
+echo "    HUD:    chrome-free web app at http://127.0.0.1:4173"

@@ -72,12 +72,14 @@ Then start from the app menu (**Omarchy Overwatch**) or:
 ~/.local/bin/omarchy-overwatch
 ```
 
-The launcher runs `npm run preview` if port `4173` is free, then opens the HUD in your default browser.
+The launcher starts `npm run preview` on `127.0.0.1:4173` if needed, then opens the HUD as an **Omarchy web app** via `omarchy-launch-webapp` (Chromium/Chrome `--app=` mode) — a chrome-free full-view window with no browser tabs or URL bar, same as YouTube/X on Omarchy. A second launch focuses the existing Overwatch window when `omarchy-launch-or-focus-webapp` is available. If those helpers are missing, it falls back to Chromium/Chrome `--app=` and finally `xdg-open`.
+
+The `.desktop` `Exec` always points at this launcher (not a bare URL) so the preview server is up before the app window opens.
 
 Dependencies on Arch/Omarchy:
 
 ```bash
-sudo pacman -S --needed git nodejs npm xdg-utils
+sudo pacman -S --needed git nodejs npm chromium xdg-utils
 ```
 
 ## Layout
