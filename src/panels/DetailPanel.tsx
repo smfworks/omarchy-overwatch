@@ -19,15 +19,18 @@ export function DetailPanel() {
     openStage,
     goBack,
     stage,
-    layers,
+    displayLayers,
     heatEnabled,
     heatCells,
     heatNote,
     runBrief,
     briefPrefs,
+    openTool,
+    toggleFavorite,
+    favorites,
   } = useOverwatch()
 
-  const livePoints = layers.flatMap((layer) =>
+  const livePoints = displayLayers.flatMap((layer) =>
     layer.enabled && (layer.status === 'live' || layer.status === 'stale') ? layer.points.slice(0, 8) : [],
   )
 
@@ -149,11 +152,14 @@ export function DetailPanel() {
           </dl>
           {tool.notes && <p>{tool.notes}</p>}
           <div className="actions">
-            <button className="btn" onClick={() => openUrl(tool.url)}>
+            <button className="btn" onClick={() => openTool(tool)}>
               Open tool
             </button>
             <button className="btn ghost" onClick={() => navigator.clipboard.writeText(tool.url)}>
               Copy URL
+            </button>
+            <button className="btn ghost" onClick={() => toggleFavorite(tool.id)}>
+              {favorites.pinned.includes(tool.id) ? 'Unpin favorite' : 'Pin favorite'}
             </button>
             <button className="btn ghost" onClick={pinSelection}>
               Pin to case
@@ -286,7 +292,7 @@ export function DetailPanel() {
               key={ev.id}
               className="tool-card selectable"
               onClick={() => {
-                for (const layer of layers) {
+                for (const layer of displayLayers) {
                   const pt = layer.points.find((p) => p.id === ev.id)
                   if (pt) {
                     selectPoint(pt)

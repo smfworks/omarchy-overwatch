@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { PRODUCT_HUD_SUB, PRODUCT_HUD_TITLE } from '../branding'
 import { useOverwatch } from '../state/context'
 import { resetLayout } from '../layout/storage'
+import { statusCountsLabel } from '../status/counts'
+import { ViewsMenu } from '../views/ViewsMenu'
+import { TOOLS } from '../catalog/tools'
 
 function utcClock() {
   return new Date().toISOString().replace('T', ' ').slice(0, 19) + 'Z'
@@ -30,6 +33,13 @@ export function StatusStrip() {
     runBrief,
     mapStyle,
     cycleMapStyle,
+    setSearchOpen,
+    statusCounts,
+    cycleHudDensity,
+    hudDensity,
+    favorites,
+    overlay,
+    setOverlay,
   } = useOverwatch()
 
   const briefDot = !briefPrefs.enabled ? '' : brief.status === 'loading' ? 'loading' : brief.status
@@ -42,6 +52,10 @@ export function StatusStrip() {
           ? 'BRIEF ERR'
           : 'BRIEF'
   const [clock, setClock] = useState(utcClock)
+  const pinnedTools = favorites.pinned
+    .map((id) => TOOLS.find((t) => t.id === id))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t))
+    .slice(0, 6)
 
   useEffect(() => {
     const id = window.setInterval(() => setClock(utcClock()), 1000)
@@ -57,6 +71,9 @@ export function StatusStrip() {
       <div className="clock">{clock}</div>
       <div className="chip-row">
         <span className="chip">{visibleTools.length} tools</span>
+        <span className="chip" title="Enabled live-layer honesty counts">
+          {statusCountsLabel(statusCounts)}
+        </span>
         {filters.categories.map((c) => (
           <span key={c} className="chip">
             {c}
@@ -65,6 +82,11 @@ export function StatusStrip() {
         {filters.opsec !== 'any' && <span className="chip">{filters.opsec}</span>}
         {!filters.categories.length && filters.opsec === 'any' && (
           <span className="chip ghost">no domain filter</span>
+        )}
+        {pinnedTools.length > 0 && (
+          <span className="chip" title={pinnedTools.map((t) => t.name).join(', ')}>
+            ★ {pinnedTools.length}
+          </span>
         )}
       </div>
       <div className="layer-toggles">
@@ -111,6 +133,28 @@ export function StatusStrip() {
           title={`Basemap ${mapStyle.toUpperCase()}. [ and ] cycle DEFAULT / SATELLITE / NIGHT. Attribution on the map.`}
         >
           MAP {mapStyle.toUpperCase()}
+        </button>
+        <button
+          type="button"
+          className={`layer-btn${overlay !== 'off' ? ' on' : ''}`}
+          title="Aesthetic overlay only — NVG / FLIR / CRT are not sensors."
+          onClick={() =>
+            setOverlay(overlay === 'off' ? 'nvg' : overlay === 'nvg' ? 'flir' : overlay === 'flir' ? 'crt' : 'off')
+          }
+        >
+          FX {overlay === 'off' ? 'OFF' : overlay.toUpperCase()}
+        </button>
+        <ViewsMenu />
+        <button type="button" className="layer-btn" title="Global search (⌘K)" onClick={() => setSearchOpen(true)}>
+          ⌘K
+        </button>
+        <button
+          type="button"
+          className="layer-btn"
+          title={`HUD density: ${hudDensity} (d)`}
+          onClick={cycleHudDensity}
+        >
+          HUD {hudDensity.toUpperCase()}
         </button>
       </div>
       <button

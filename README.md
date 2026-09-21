@@ -2,6 +2,8 @@
 
 Dark-theme OSINT **workbench** for [Omarchy Linux](https://omarchy.org/): a configurable HUD, an interactive globe, locality / storm maps, and a curated catalog of **public** investigation sources.
 
+**v3.1** adds investigation UX on top of the v3.0 command center: global search, AOI draw, named views, a time scrubber over polled history, region summaries, deep links, case packets, favorites, a first-run tour, and HUD density modes — still a launcher, still honest LIVE/STALE/ERR/OFF.
+
 The product name is **Overwatch OSINT for Omarchy**. The GitHub repo stays [`smfworks/omarchy-overwatch`](https://github.com/smfworks/omarchy-overwatch) and the CLI/bin remains `omarchy-overwatch` so existing install paths keep working.
 
 It is a **dashboard + launcher**, not a SpiderFoot/Maltego/Recon-ng clone. It does not scan networks, steal credentials, or fabricate intelligence.
@@ -86,7 +88,7 @@ sudo pacman -S --needed git nodejs npm chromium xdg-utils
 
 ## Layout
 
-Docks persist in `localStorage` (`omarchy-overwatch.layout.v1`):
+Docks persist in `localStorage` (`omarchy-overwatch.layout.v1`). HUD density (`d`) can hide docks without wiping those sizes.
 
 | Dock | Default | Contents |
 | --- | --- | --- |
@@ -104,10 +106,12 @@ Selecting a catalog card or ticker headline opens an **in-depth center stage** (
 | Key | Action |
 | --- | --- |
 | `/` | Focus catalog search |
-| `Esc` | Close help → close case notes → back to globe → clear selection → clear query |
+| `⌘K` / `Ctrl+K` / `k` | Global search palette (catalog, live points, HEAT, headlines, pins) |
+| `Esc` | Close search → guided open → region summary → tour → help → case notes → clear AOI → back to globe → clear selection → clear query |
 | `b` | Back to globe from map / storm / depth / brief |
 | `1` / `2` / `3` / `4` | Toggle left / right / top / bottom |
 | `n` | Case notes drawer |
+| `d` | Cycle HUD density Operator / Minimal / Presentation |
 | `[` / `]` | Cycle map basemap DEFAULT / SATELLITE / NIGHT |
 | `?` | Help overlay |
 
@@ -236,8 +240,30 @@ Local-only investigation scratchpad. Open with **n**, the **N** control in the s
 - Freeform notes (plaintext or light markdown; preview is local-only)
 - Persist in `localStorage` key `omarchy-overwatch.cases.v1`
 - Export / import one case as JSON
+- Export a **case packet**: Markdown notes + GeoJSON of pin coordinates (JSON import/export remains)
 
 Overwatch OSINT for Omarchy never auto-fills notes or pins. Importing JSON creates a **new** case id so it will not silently overwrite another case.
+
+## Investigation UX (v3.1)
+
+All of this stays on **currently loaded public data**. Empty / UNKNOWN is honest. Nothing is scanned, stuffed, or invented.
+
+| Control | What it does |
+| --- | --- |
+| **Global search** (`⌘K`) | Palette over catalog tools, live points, HEAT cells, ticker headlines, and case pins. Select a hit to focus the map/globe or open depth. |
+| **AOI** | On a locality map, **RECT** / **POLY** draw a rectangle or polygon. Visible live points and HEAT cells clip to that area. **CLEAR AOI** removes it. |
+| **Named views** | **VIEWS** in the status strip saves camera/map center+zoom, enabled layers, map style, overlay, and AOI in `omarchy-overwatch.views.v1`. Load / delete locally. |
+| **Time scrubber** | `1h` / `6h` / `24h` / `ALL` filters time-bearing layers (USGS, FIRMS, NWS, EONET, …) using `observedAt` from the feed plus a client ring buffer / IndexedDB cache of **already polled** points. Untimed live snapshots stay visible. **PLAY** steps through dated timestamps already in memory — it does not interpolate tracks. |
+| **Region dossier** | Right-click the globe or locality map for an **on-screen summary** of currently loaded public points in view or AOI (counts + nearest). Banner: not a classified sitrep. Empty is **UNKNOWN**. |
+| **Deep links** | The HUD writes `?lat=&lon=&z=&layers=&style=&aoi=` with `history.replaceState` (Omarchy webapp-safe). Opening a URL restores that subset. |
+| **Favorites / recent** | ★ pins a catalog tool to the catalog top and status strip. Opening a tool records it under Recent. |
+| **Guided open** | If a tool declares inputs (domain / email / hash / …), **Open tool** shows optional fields plus an OPSEC reminder, then opens the catalog URL. Fields may be copied to the clipboard — the URL is not rewritten into a scanner. |
+| **Workspace backup** | Help (`?`) exports/imports one JSON of layout + feeds + cases + map style + views + favorites + HUD prefs. Brief API keys are stripped. |
+| **HUD density** | Operator (all docks) / Minimal (status strip) / Presentation (stage only, floating chrome). Key `d`. |
+| **Legend / craft icons** | Collapsible **LEGEND** for layer colors. ADS-B / AIS / SAT use craft silhouettes when type is known; heading rotates them. |
+| **Overlays** | NVG / FLIR / CRT are aesthetic CSS only — not sensors. Globe shows an approximate day/night terminator line. `prefers-reduced-motion` disables orbit, heat pulse, and trail animation. |
+| **First-run tour** | ~60s honesty walkthrough (layers, HEAT, brief, MAP styles, search, AOI). Skip anytime. Stored in `omarchy-overwatch.tour.v1`. |
+| **Poll pause** | Layer and ticker polls skip while `document.hidden`. Status strip shows **LIVE n · STALE n · ERR n**. |
 
 ## Catalog
 

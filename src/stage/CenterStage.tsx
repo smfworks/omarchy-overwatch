@@ -2,6 +2,10 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { colorForKind } from '../globe/colors'
 import { useOverwatch } from '../state/context'
 import { StageErrorBoundary } from './StageErrorBoundary'
+import { TimeScrubber } from '../time/TimeScrubber'
+import { LayerLegend } from '../legend/LayerLegend'
+import { RegionDossier } from '../region/RegionDossier'
+import { prefersReducedMotion } from '../hud/motion'
 
 const OverwatchGlobe = lazy(() => import('../globe/OverwatchGlobe').then((m) => ({ default: m.OverwatchGlobe })))
 const LocalityMap = lazy(() => import('../maps/LocalityMap').then((m) => ({ default: m.LocalityMap })))
@@ -34,23 +38,38 @@ export function CenterStage() {
     heatCells,
     selectHeat,
     selectPoint,
-    layers,
+    displayLayers,
     mapStyle,
     setMapStyle,
     mapNvg,
     setMapNvg,
     trails,
+    overlay,
+    reducedMotion,
+    hudDensity,
+    setSearchOpen,
+    setHelpOpen,
+    cycleHudDensity,
   } = useOverwatch()
-  const [globeOn, setGlobeOn] = useState(stage === 'globe')
+  const [globeOn, setGlobeOn] = useState(true)
+  const [globeFading, setGlobeFading] = useState(false)
+  const reduce = reducedMotion || prefersReducedMotion()
 
   useEffect(() => {
-    if (stage !== 'globe') {
-      setGlobeOn(false)
-      return
+    if (stage === 'globe') {
+      setGlobeFading(false)
+      const id = window.setTimeout(() => setGlobeOn(true), reduce ? 0 : 80)
+      return () => window.clearTimeout(id)
     }
-    const id = window.setTimeout(() => setGlobeOn(true), 120)
-    return () => window.clearTimeout(id)
-  }, [stage])
+    if (stage === 'map' || stage === 'storm') {
+      setGlobeOn(true)
+      setGlobeFading(true)
+      const id = window.setTimeout(() => setGlobeOn(false), reduce ? 0 : 520)
+      return () => window.clearTimeout(id)
+    }
+    setGlobeOn(false)
+    setGlobeFading(false)
+  }, [stage, reduce])
 
   const label =
     selection?.kind === 'tool'
@@ -76,6 +95,7 @@ export function CenterStage() {
             geometry: selection.point.geometry,
             color: colorForKind(selection.point.kind),
             heading: selection.point.heading,
+            kind: selection.point.kind,
           }
         : selection?.kind === 'heat'
           ? {
@@ -88,15 +108,32 @@ export function CenterStage() {
 
   const mapHeat = heatEnabled ? heatCells : undefined
   const extraMarkers = useMemo(() => {
-    if (selection?.kind !== 'heat') return undefined
-    return selection.cell.events.map((ev) => ({
-      id: ev.id,
-      lat: ev.lat,
-      lng: ev.lng,
-      label: `${ev.layerLabel}: ${ev.label}`,
-      color: colorForKind(ev.kind),
-    }))
-  }, [selection])
+    if (selection?.kind === 'heat') {
+      return selection.cell.events.map((ev) => ({
+        id: ev.id,
+        lat: ev.lat,
+        lng: ev.lng,
+        label: `${ev.layerLabel}: ${ev.label}`,
+        color: colorForKind(ev.kind),
+        kind: ev.kind,
+      }))
+    }
+    return displayLayers
+      .flatMap((layer) =>
+        layer.enabled && (layer.status === 'live' || layer.status === 'stale')
+          ? layer.points.map((p) => ({
+              id: p.id,
+              lat: p.lat,
+              lng: p.lng,
+              label: p.label,
+              color: colorForKind(p.kind),
+              heading: p.heading,
+              kind: p.kind,
+            }))
+          : [],
+      )
+      .slice(0, 80)
+  }, [selection, displayLayers])
 
   const mapTrails = useMemo(() => {
     if (selection?.kind === 'point') {
@@ -111,7 +148,7 @@ export function CenterStage() {
   }
 
   const onMarkerClick = (id: string) => {
-    for (const layer of layers) {
+    for (const layer of displayLayers) {
       const pt = layer.points.find((p) => p.id === id)
       if (pt) {
         selectPoint(pt)
@@ -120,16 +157,19 @@ export function CenterStage() {
     }
   }
 
+  const fxClass =
+    overlay === 'nvg' ? 'nvg' : overlay === 'flir' ? 'flir' : overlay === 'crt' ? 'crt' : ''
+
   return (
-    <div className="stage">
+    <div className={`stage${fxClass ? ` fx-${fxClass}` : ''}${heatEnabled ? ' heat-on' : ''}`}>
       <span className="corner tl" />
       <span className="corner tr" />
       <span className="corner bl" />
       <span className="corner br" />
       <StageErrorBoundary onReset={goBack}>
         <Suspense fallback={<StageFallback />}>
-          {stage === 'globe' && globeOn ? (
-            <div className="stage-globe">
+          {globeOn ? (
+            <div className={`stage-globe${globeFading ? ' fading' : ''}${stage !== 'globe' ? ' is-hidden' : ''}`}>
               <OverwatchGlobe />
             </div>
           ) : null}
@@ -147,18 +187,19 @@ export function CenterStage() {
               onMarkerClick={onMarkerClick}
               fitHeat={selection?.kind === 'heat'}
               mapStyle={mapStyle}
-              nvg={mapNvg}
+              nvg={mapNvg || overlay === 'nvg'}
               onMapStyle={setMapStyle}
               onNvg={setMapNvg}
               trails={mapTrails}
               heading={'heading' in geo ? geo.heading : undefined}
+              craftKind={'kind' in geo ? geo.kind : undefined}
             />
           )}
           {stage === 'storm' && selection?.kind === 'point' && (
             <StormMap
               point={selection.point}
               mapStyle={mapStyle}
-              nvg={mapNvg}
+              nvg={mapNvg || overlay === 'nvg'}
               onMapStyle={setMapStyle}
               onNvg={setMapNvg}
             />
@@ -167,6 +208,13 @@ export function CenterStage() {
           {stage === 'brief' && <BriefView />}
         </Suspense>
       </StageErrorBoundary>
+      {(stage === 'globe' || stage === 'map' || stage === 'storm') && (
+        <div className="stage-tools">
+          <TimeScrubber />
+          <LayerLegend />
+        </div>
+      )}
+      <RegionDossier />
       {stage !== 'globe' && (
         <div className="stage-chrome">
           <button type="button" className="btn stage-back" onClick={goBack} title="Back to globe (Esc or b)">
@@ -175,7 +223,22 @@ export function CenterStage() {
           <div className="stage-title">{stageTitle(stage, label)}</div>
         </div>
       )}
+      {hudDensity === 'presentation' && (
+        <div className="presentation-chrome">
+          <button type="button" className="btn ghost" onClick={() => setSearchOpen(true)}>
+            Search
+          </button>
+          <button type="button" className="btn ghost" onClick={cycleHudDensity}>
+            HUD
+          </button>
+          <button type="button" className="btn ghost" onClick={() => setHelpOpen(true)}>
+            Help
+          </button>
+        </div>
+      )}
       <div className="scanlines" />
+      {overlay === 'flir' && <div className="map-fx-flir" aria-hidden="true" />}
+      {overlay === 'crt' && <div className="map-fx-crt" aria-hidden="true" />}
     </div>
   )
 }

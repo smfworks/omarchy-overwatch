@@ -7,7 +7,7 @@ function openUrl(url: string) {
 }
 
 export function DepthView() {
-  const { selection, selectTool, selectPoint, pinSelection, openStage, layers } = useOverwatch()
+  const { selection, selectTool, selectPoint, pinSelection, openStage, displayLayers, openTool } = useOverwatch()
 
   if (!selection) {
     return (
@@ -45,7 +45,7 @@ export function DepthView() {
         </dl>
         {tool.notes && <p>{tool.notes}</p>}
         <div className="actions">
-          <button className="btn" onClick={() => openUrl(tool.url)}>
+          <button className="btn" onClick={() => openTool(tool)}>
             Open tool
           </button>
           <button className="btn ghost" onClick={() => navigator.clipboard.writeText(tool.url)}>
@@ -169,7 +169,7 @@ export function DepthView() {
             key={ev.id}
             className="tool-card"
             onClick={() => {
-              for (const layer of layers) {
+              for (const layer of displayLayers) {
                 const pt = layer.points.find((p) => p.id === ev.id)
                 if (pt) selectPoint(pt)
               }

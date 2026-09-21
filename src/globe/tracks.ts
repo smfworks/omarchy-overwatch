@@ -19,6 +19,7 @@ export interface TrackTrail {
   kind: GeoKind
   color: string
   coords: [number, number][]
+  opacity: number
 }
 
 interface TrackEntry {
@@ -113,11 +114,14 @@ export function trailsFromBuffer(now = Date.now()): TrackTrail[] {
     const coords = entry.samples.map((s) => [s.lat, s.lng] as [number, number])
     const parts = splitAntimeridian(coords)
     parts.forEach((part, i) => {
+      const age = now - entry.lastAt
+      const opacity = Math.max(0.18, 1 - age / TRACK_MAX_AGE_MS)
       trails.push({
         id: parts.length === 1 ? entry.id : `${entry.id}·${i}`,
         kind: entry.kind,
         color: colorForKind(entry.kind),
         coords: part,
+        opacity,
       })
     })
   }
@@ -131,7 +135,7 @@ export function trailForId(id: string, now = Date.now()): TrackTrail | null {
   const parts = splitAntimeridian(entry.samples.map((s) => [s.lat, s.lng] as [number, number]))
   const longest = parts.sort((a, b) => b.length - a.length)[0]
   if (!longest) return null
-  return { id: entry.id, kind: entry.kind, color: colorForKind(entry.kind), coords: longest }
+  return { id: entry.id, kind: entry.kind, color: colorForKind(entry.kind), coords: longest, opacity: 0.85 }
 }
 
 export function trackBufferSize(): number {

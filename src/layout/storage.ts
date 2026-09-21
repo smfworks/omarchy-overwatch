@@ -18,7 +18,7 @@ export const DEFAULT_LAYOUT: LayoutState = {
   bottom: true,
   leftWidth: 360,
   rightWidth: 380,
-  topHeight: 100,
+  topHeight: 112,
   bottomHeight: 52,
 }
 
@@ -37,7 +37,7 @@ export function sanitizeLayout(partial: Partial<LayoutState> | null | undefined)
     bottom: Boolean(base.bottom),
     leftWidth: clamp(Number(base.leftWidth) || DEFAULT_LAYOUT.leftWidth, 240, 640),
     rightWidth: clamp(Number(base.rightWidth) || DEFAULT_LAYOUT.rightWidth, 260, 640),
-    topHeight: clamp(Number(base.topHeight) || DEFAULT_LAYOUT.topHeight, 44, 120),
+    topHeight: clamp(Number(base.topHeight) || DEFAULT_LAYOUT.topHeight, 44, 168),
     bottomHeight: clamp(Number(base.bottomHeight) || DEFAULT_LAYOUT.bottomHeight, 36, 160),
   }
 }
