@@ -22,10 +22,19 @@ src/heat/        H3 attention overlay (client-side score + MapLibre/globe)
 src/brief/       optional BYOK / Ollama on-screen brief (localStorage key only)
 src/maps/        MapLibre locality + storm maps (OSM / Esri imagery / OpenFreeMap + RainViewer)
 src/stage/       center stage (globe / map / storm / depth / brief)
-src/cases/       local case-notes store (localStorage, export/import)
+src/cases/       local case-notes store (localStorage, export/import, markdown/geojson packet)
 src/feeds/       RSS ticker (proxied) + custom feed prefs
 src/layout/      dock chrome + localStorage
-src/panels/      catalog, dossier, status, ticker, help, case drawer
+src/panels/      catalog, dossier, status, ticker, help, case drawer, guided open
+src/search/      ⌘K palette across catalog + currently loaded public data
+src/aoi/         locality-map rectangle/polygon clip
+src/views/       named camera/layer snapshots
+src/time/        1h/6h/24h window + poll ring buffer (no fabricated history)
+src/deeplink/    ?lat=&lon=&z=&layers=&style=&aoi=
+src/favorites/   pinned + recent catalog tools
+src/workspace/   layout/feeds/cases/views/favorites backup JSON
+src/hud/         density modes + reduced-motion helpers
+src/tour/        first-run honesty tour
 scripts/         Omarchy install + desktop wrapper
 ```
 
@@ -45,11 +54,11 @@ No API keys in the repo. Optional keys live in `.env` (see `.env.example`): `AIS
 
 OpenStreetMap raster (DEFAULT), Esri World Imagery (SATELLITE, attributed), OpenFreeMap dark (NIGHT) and RainViewer public endpoints need no key. Custom RSS URLs must be `http`/`https` only.
 
-Case notes persist in `omarchy-overwatch.cases.v1`. Feed prefs persist in `omarchy-overwatch.feeds.v1`. Heat toggle persists in `omarchy-overwatch.heat.v1`. Map style persists in `omarchy-overwatch.mapstyle.v1`. Optional brief prefs/key persist in `omarchy-overwatch.brief.v1` (never commit). Do not auto-fill notes or pins.
+Case notes persist in `omarchy-overwatch.cases.v1`. Feed prefs persist in `omarchy-overwatch.feeds.v1`. Heat toggle persists in `omarchy-overwatch.heat.v1`. Map style persists in `omarchy-overwatch.mapstyle.v1`. Optional brief prefs/key persist in `omarchy-overwatch.brief.v1` (never commit). Named views persist in `omarchy-overwatch.views.v1`. Favorites/recents persist in `omarchy-overwatch.favorites.v1`. HUD density/overlay persist in `omarchy-overwatch.hud.v1`. First-run tour completion persists in `omarchy-overwatch.tour.v1`. Do not auto-fill notes or pins.
 
 ## UI
 
-Dark glass HUD. Cyan/amber status language. Keyboard: `/`, `Esc`, `b`, `1–4`, `n`, `[` `]`, `?`. Persist docks in `omarchy-overwatch.layout.v1`.
+Dark glass HUD. Cyan/amber status language. Keyboard: `/`, `⌘K`, `Esc`, `b`, `1–4`, `n`, `d`, `[` `]`, `?`. Persist docks in `omarchy-overwatch.layout.v1`.
 
 Globe textures live in `public/globe/` (no unpkg). Offline machines will show an untextured globe if those files are missing; that is acceptable. Locality/storm maps use the style pack (OSM / Esri / OpenFreeMap) — offline = empty map or OSM embed + honest ERR/empty, not invented streets. HEAT is a documented H3 overlay (L = distinct live layers in a cell). On-screen brief is opt-in BYOK/Ollama only.
 

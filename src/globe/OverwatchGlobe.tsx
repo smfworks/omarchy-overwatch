@@ -7,6 +7,8 @@ import { useOverwatch } from '../state/context'
 import { colorForKind } from './colors'
 import type { GeoPoint } from './layers'
 import type { TrackTrail } from './tracks'
+import { craftMarkerElement } from '../craft/icons'
+import { terminatorCoords } from '../solar/terminator'
 
 const NIGHT = '/globe/earth-night.jpg'
 const BUMP = '/globe/earth-topology.png'
@@ -26,7 +28,17 @@ interface Marker {
 
 type HtmlItem =
   | { html: 'beacon'; id: string; lat: number; lng: number; name: string; kind: string }
-  | { html: 'track'; id: string; lat: number; lng: number; name: string; heading: number; color: string }
+  | { html: 'track'; id: string; lat: number; lng: number; name: string; heading?: number; color: string; kind: string }
+
+function fadeHex(color: string, alpha: number): string {
+  if (color.startsWith('rgba') || color.startsWith('rgb')) return color
+  const hex = color.replace('#', '')
+  if (hex.length !== 6) return color
+  const r = Number.parseInt(hex.slice(0, 2), 16)
+  const g = Number.parseInt(hex.slice(2, 4), 16)
+  const b = Number.parseInt(hex.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
 
 function webglAvailable(): boolean {
   try {
@@ -42,7 +54,7 @@ function webglAvailable(): boolean {
 
 export function OverwatchGlobe() {
   const {
-    layers,
+    displayLayers,
     selectHotspot,
     selectPoint,
     selectHeat,
@@ -53,6 +65,8 @@ export function OverwatchGlobe() {
     heatEnabled,
     heatCells,
     trails,
+    reducedMotion,
+    requestRegion,
   } = useOverwatch()
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -73,13 +87,13 @@ export function OverwatchGlobe() {
   flyToRef.current = flyTo
 
   useEffect(() => {
-    if (flyTo) globeRef.current?.pointOfView(flyTo, 900)
-  }, [flyTo])
+    if (flyTo) globeRef.current?.pointOfView(flyTo, reducedMotion ? 0 : 900)
+  }, [flyTo, reducedMotion])
 
   useEffect(() => {
     const controls = globeRef.current?.controls()
-    if (controls) controls.autoRotate = stage === 'globe' && !selection
-  }, [stage, selection])
+    if (controls) controls.autoRotate = !reducedMotion && stage === 'globe' && !selection
+  }, [stage, selection, reducedMotion])
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -96,7 +110,7 @@ export function OverwatchGlobe() {
   const selectedHeatId = selection?.kind === 'heat' ? selection.cell.id : null
 
   const liveMarkers = useMemo<Marker[]>(() => {
-    return layers.flatMap((layer) =>
+    return displayLayers.flatMap((layer) =>
       layer.enabled && (layer.status === 'live' || layer.status === 'stale')
         ? layer.points.map((p) => {
             const selected = p.id === selectedId
@@ -124,10 +138,10 @@ export function OverwatchGlobe() {
           })
         : [],
     )
-  }, [layers, selectedId])
+  }, [displayLayers, selectedId])
 
   const headingMarkers = useMemo(
-    () => liveMarkers.filter((m) => m.heading != null && (m.kind === 'aircraft' || m.kind === 'vessel' || m.kind === 'sat')),
+    () => liveMarkers.filter((m) => m.kind === 'aircraft' || m.kind === 'vessel' || m.kind === 'sat'),
     [liveMarkers],
   )
   const blobMarkers = useMemo(() => {
@@ -150,8 +164,9 @@ export function OverwatchGlobe() {
       lat: m.lat,
       lng: m.lng,
       name: m.name,
-      heading: m.heading ?? 0,
+      heading: m.heading,
       color: m.color,
+      kind: m.kind,
     }))
     return [...beacons, ...tracks]
   }, [headingMarkers])
@@ -160,17 +175,11 @@ export function OverwatchGlobe() {
     (obj: object) => {
       const item = obj as HtmlItem
       if (item.html === 'track') {
-        const el = document.createElement('button')
-        el.type = 'button'
-        el.className = 'heading-marker globe-heading'
-        el.style.setProperty('--hm-color', item.color)
-        el.style.transform = `rotate(${item.heading}deg)`
-        el.title = item.name
-        el.setAttribute('aria-label', item.name)
+        const el = craftMarkerElement(item.kind, item.color, item.heading, item.name)
         el.style.pointerEvents = 'auto'
         el.addEventListener('click', (ev) => {
           ev.stopPropagation()
-          for (const layer of layers) {
+          for (const layer of displayLayers) {
             const pt = layer.points.find((p) => p.id === item.id)
             if (pt) {
               selectPoint(pt)
@@ -193,7 +202,7 @@ export function OverwatchGlobe() {
       })
       return el
     },
-    [layers, selectHotspot, selectPoint, selectedHotspotId],
+    [displayLayers, selectHotspot, selectPoint, selectedHotspotId],
   )
 
   const rings = useMemo(() => {
@@ -221,6 +230,16 @@ export function OverwatchGlobe() {
     () => (heatEnabled ? cellsToGlobePolygons(heatCells, selectedHeatId) : []),
     [heatEnabled, heatCells, selectedHeatId],
   )
+  const paths = useMemo<TrackTrail[]>(() => {
+    const term: TrackTrail[] = terminatorCoords().map((coords, i) => ({
+      id: `terminator-${i}`,
+      kind: 'event',
+      color: 'rgba(232, 184, 74, 0.38)',
+      coords,
+      opacity: 0.38,
+    }))
+    return [...term, ...trails]
+  }, [trails])
 
   if (!webgl) {
     return (
@@ -236,7 +255,17 @@ export function OverwatchGlobe() {
   }
 
   return (
-    <div className="globe-inner" ref={wrapRef}>
+    <div
+      className="globe-inner"
+      ref={wrapRef}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        const pov = globeRef.current?.pointOfView()
+        if (pov && Number.isFinite(pov.lat) && Number.isFinite(pov.lng)) {
+          requestRegion({ lat: pov.lat, lng: pov.lng })
+        }
+      }}
+    >
       <Globe
         ref={globeRef}
         width={dims.width}
@@ -262,9 +291,9 @@ export function OverwatchGlobe() {
         onGlobeReady={() => {
           const controls = globeRef.current?.controls()
           if (controls) {
-            controls.autoRotate = true
+            controls.autoRotate = !reducedMotion
             controls.autoRotateSpeed = 0.28
-            controls.enableDamping = true
+            controls.enableDamping = !reducedMotion
           }
           const resume = flyToRef.current
           globeRef.current?.pointOfView(resume ?? { lat: 18, lng: 25, altitude: 2.4 }, 0)
@@ -275,7 +304,7 @@ export function OverwatchGlobe() {
         }}
         onPointClick={(d: object) => {
           const m = d as Marker
-          for (const layer of layers) {
+          for (const layer of displayLayers) {
             const pt = layer.points.find((p) => p.id === m.id)
             if (pt) {
               selectPoint(pt)
@@ -297,17 +326,22 @@ export function OverwatchGlobe() {
           const cell = heatCells.find((c) => c.id === poly.id)
           if (cell) selectHeat(cell)
         }}
-        pathsData={trails}
+        pathsData={paths}
         pathPoints={(d: object) => (d as TrackTrail).coords.map(([lat, lng]) => [lat, lng, 0.01])}
-        pathColor={(d: object) => (d as TrackTrail).color}
+        pathColor={(d: object) => {
+          const trail = d as TrackTrail
+          if (trail.id.startsWith('terminator')) return trail.color
+          return [fadeHex(trail.color, 0.08), fadeHex(trail.color, trail.opacity ?? 0.8)]
+        }}
         pathStroke={0.55}
         pathDashLength={0.01}
         pathDashGap={0.006}
         pathDashAnimateTime={0}
         onPathClick={(d: object) => {
           const trail = d as TrackTrail
+          if (trail.id.startsWith('terminator')) return
           const id = trail.id.split('·')[0]
-          for (const layer of layers) {
+          for (const layer of displayLayers) {
             const pt = layer.points.find((p) => p.id === id)
             if (pt) {
               selectPoint(pt)
@@ -315,13 +349,13 @@ export function OverwatchGlobe() {
             }
           }
         }}
-        ringsData={rings}
+        ringsData={reducedMotion ? [] : rings}
         ringLat="lat"
         ringLng="lng"
         ringColor={(d: object) => (d as { color: string }).color}
         ringMaxRadius="maxR"
-        ringPropagationSpeed={2.2}
-        ringRepeatPeriod={1400}
+        ringPropagationSpeed={reducedMotion ? 0 : 2.2}
+        ringRepeatPeriod={reducedMotion ? 0 : 1400}
         animateIn={false}
       />
       <div className="globe-hint">
@@ -335,7 +369,7 @@ export function OverwatchGlobe() {
                 ? `${heatPolys.length} attention cells · click a hex`
                 : liveCount
                   ? `${liveCount} live highlights${trails.length ? ` · ${trails.length} sampled trails` : ''} · drag to orbit · click a point`
-                  : 'drag to orbit · scroll to zoom · click a beacon'}
+                  : 'drag to orbit · scroll to zoom · click a beacon · right-click for on-screen summary'}
       </div>
     </div>
   )

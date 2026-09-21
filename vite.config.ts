@@ -106,6 +106,8 @@ export default defineConfig(({ mode }) => {
               return 'globe'
             }
             if (id.includes('/src/brief/')) return 'brief'
+            if (id.includes('/src/search/')) return 'search'
+            if (id.includes('/src/tour/')) return 'tour'
           },
         },
       },

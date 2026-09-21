@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TOOLS } from '../catalog/tools'
 import { HOTSPOTS } from '../data/hotspots'
 import { renderNotesPreview } from '../cases/markdown'
+import { exportCaseMarkdown, filenameForPacket, pinsToGeoJSON } from '../cases/packet'
 import {
   activeCase,
   createEmptyCase,
@@ -31,8 +32,8 @@ function pointKind(kind: string): GeoPoint['kind'] {
   return 'event'
 }
 
-function download(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'application/json' })
+function download(filename: string, text: string, mime = 'application/json') {
+  const blob = new Blob([text], { type: mime })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -251,6 +252,28 @@ export function CaseNotesDrawer() {
                   onClick={() => download(filenameForCase(current), exportCaseJson(current))}
                 >
                   Export JSON
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() =>
+                    download(filenameForPacket(current, 'md'), exportCaseMarkdown(current), 'text/markdown')
+                  }
+                >
+                  Export MD
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() =>
+                    download(
+                      filenameForPacket(current, 'geojson'),
+                      `${JSON.stringify(pinsToGeoJSON(current.pins), null, 2)}\n`,
+                      'application/geo+json',
+                    )
+                  }
+                >
+                  Export GeoJSON
                 </button>
                 <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()}>
                   Import JSON

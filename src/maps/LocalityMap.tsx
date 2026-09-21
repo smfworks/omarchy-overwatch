@@ -5,7 +5,7 @@ import type { FeedGeometry } from '../globe/types'
 import type { TrackTrail } from '../globe/tracks'
 import { cellsToFeatureCollection } from '../heat/geojson'
 import type { HeatCell } from '../heat/types'
-import { headingMarkerElement, mapFxClass } from './markers'
+import { mapFxClass, markerElement } from './markers'
 import { MapStylePack } from './MapStylePack'
 import { OsmFallback } from './OsmFallback'
 import {
@@ -14,6 +14,9 @@ import {
   styleSpecFor,
   type MapStyleId,
 } from './styles'
+import { aoiToGeoJSON, sanitizeAoi } from '../aoi/geo'
+import { useOverwatch } from '../state/context'
+import { craftKind } from '../craft/icons'
 
 export interface ExtraMapMarker {
   id: string
@@ -22,6 +25,7 @@ export interface ExtraMapMarker {
   label: string
   color: string
   heading?: number
+  kind?: string
 }
 
 export function LocalityMap({
@@ -42,6 +46,7 @@ export function LocalityMap({
   onNvg,
   trails,
   heading,
+  craftKind: primaryKind,
 }: {
   lat: number
   lng: number
@@ -60,6 +65,7 @@ export function LocalityMap({
   onNvg?: (on: boolean) => void
   trails?: TrackTrail[]
   heading?: number
+  craftKind?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Map | null>(null)
@@ -69,6 +75,17 @@ export function LocalityMap({
   const markerClickRef = useRef(onMarkerClick)
   heatClickRef.current = onHeatClick
   markerClickRef.current = onMarkerClick
+  const {
+    aoi,
+    setAoi,
+    drawMode,
+    setDrawMode,
+    requestRegion,
+    reportMapView,
+    overlay,
+    reducedMotion,
+  } = useOverwatch()
+  const draftRef = useRef<[number, number][]>([])
 
   useEffect(() => {
     const el = ref.current
@@ -103,15 +120,16 @@ export function LocalityMap({
       if (/webgl|context/i.test(msg)) setFailed(msg)
     })
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
-    const primaryEl = heading != null ? headingMarkerElement(markerColor, heading, label) : undefined
+    const primaryEl =
+      craftKind(primaryKind) || heading != null
+        ? markerElement(markerColor, label, { heading, kind: primaryKind })
+        : undefined
     const marker = new Marker(primaryEl ? { element: primaryEl } : { color: markerColor }).setLngLat([lng, lat]).addTo(map)
     marker.setPopup(new Popup({ closeButton: false }).setText(label))
     const extras: Marker[] = []
     for (const m of extraMarkers ?? []) {
-      const elMark =
-        m.heading != null
-          ? headingMarkerElement(m.color, m.heading, m.label)
-          : undefined
+      if (m.id && m.lat === lat && m.lng === lng) continue
+      const elMark = markerElement(m.color, m.label, { heading: m.heading, kind: m.kind })
       const mk = new Marker(elMark ? { element: elMark } : { color: m.color, scale: 0.72 })
         .setLngLat([m.lng, m.lat])
         .addTo(map)
@@ -161,7 +179,7 @@ export function LocalityMap({
                 c.forEach(walk)
               }
               walk(geometry.coordinates)
-              if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 48, maxZoom: 11, duration: 800 })
+              if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 48, maxZoom: 11, duration: reducedMotion ? 0 : 800 })
             } catch {
               /* keep default zoom — do not invent a viewport */
             }
@@ -181,7 +199,7 @@ export function LocalityMap({
             source: 'heat-cells',
             paint: {
               'fill-color': ['get', 'fill'],
-              'fill-opacity': 1,
+              'fill-opacity': reducedMotion ? 0.32 : 0.28,
             },
           })
           map.addLayer({
@@ -210,7 +228,7 @@ export function LocalityMap({
           try {
             const bounds = new LngLatBounds()
             for (const [x, y] of selected.ring) bounds.extend([x, y])
-            if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, maxZoom: 7.5, duration: 600 })
+            if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, maxZoom: 7.5, duration: reducedMotion ? 0 : 600 })
           } catch {
             /* keep default zoom */
           }
@@ -219,6 +237,23 @@ export function LocalityMap({
       setStyleReady((n) => n + 1)
     }
     map.on('load', onLoad)
+    map.on('moveend', () => {
+      const c = map.getCenter()
+      reportMapView({ lat: c.lat, lng: c.lng, zoom: map.getZoom() })
+    })
+    map.on('contextmenu', (ev) => {
+      ev.preventDefault()
+      const b = map.getBounds()
+      requestRegion(
+        { lat: ev.lngLat.lat, lng: ev.lngLat.lng },
+        {
+          minLat: b.getSouth(),
+          minLng: b.getWest(),
+          maxLat: b.getNorth(),
+          maxLng: b.getEast(),
+        },
+      )
+    })
 
     return () => {
       try {
@@ -230,7 +265,7 @@ export function LocalityMap({
         /* MapLibre can throw if the WebGL context was already lost */
       }
     }
-  }, [lat, lng, label, geometry, markerColor, failed, heatCells, selectedHeatId, extraMarkers, fitHeat, mapStyle, heading])
+  }, [lat, lng, label, geometry, markerColor, failed, heatCells, selectedHeatId, extraMarkers, fitHeat, mapStyle, heading, primaryKind, reducedMotion, reportMapView, requestRegion])
 
   useEffect(() => {
     const map = mapRef.current
@@ -243,7 +278,7 @@ export function LocalityMap({
           .filter((t) => t.coords.length >= 2)
           .map((t) => ({
             type: 'Feature' as const,
-            properties: { id: t.id, color: t.color },
+            properties: { id: t.id, color: t.color, opacity: t.opacity ?? 0.7 },
             geometry: {
               type: 'LineString' as const,
               coordinates: t.coords.map(([alat, alng]) => [alng, alat]),
@@ -262,7 +297,7 @@ export function LocalityMap({
           paint: {
             'line-color': ['coalesce', ['get', 'color'], '#8b9cff'],
             'line-width': 1.6,
-            'line-opacity': 0.75,
+            'line-opacity': ['coalesce', ['get', 'opacity'], 0.7],
           },
         })
       }
@@ -271,16 +306,114 @@ export function LocalityMap({
     else map.once('load', apply)
   }, [trails, styleReady, failed])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || failed) return
+    const apply = () => {
+      if (!map.isStyleLoaded()) return
+      const data = aoi
+        ? { type: 'FeatureCollection' as const, features: [aoiToGeoJSON(aoi)] }
+        : { type: 'FeatureCollection' as const, features: [] }
+      const src = map.getSource('aoi')
+      if (src && 'setData' in src && typeof src.setData === 'function') {
+        src.setData(data)
+      } else if (!map.getSource('aoi')) {
+        map.addSource('aoi', { type: 'geojson', data })
+        map.addLayer({
+          id: 'aoi-fill',
+          type: 'fill',
+          source: 'aoi',
+          paint: { 'fill-color': '#3ee0c8', 'fill-opacity': 0.12 },
+        })
+        map.addLayer({
+          id: 'aoi-line',
+          type: 'line',
+          source: 'aoi',
+          paint: { 'line-color': '#3ee0c8', 'line-width': 2, 'line-dasharray': [2, 1] },
+        })
+      }
+    }
+    if (map.isStyleLoaded()) apply()
+    else map.once('load', apply)
+  }, [aoi, styleReady, failed])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || failed) return
+    const onClick = (ev: { lngLat: { lat: number; lng: number } }) => {
+      if (drawMode === 'off') return
+      const pt: [number, number] = [ev.lngLat.lng, ev.lngLat.lat]
+      if (drawMode === 'rect') {
+        draftRef.current.push(pt)
+        if (draftRef.current.length >= 2) {
+          const [a, b] = draftRef.current
+          const next = sanitizeAoi({
+            kind: 'rect',
+            minLng: Math.min(a[0], b[0]),
+            minLat: Math.min(a[1], b[1]),
+            maxLng: Math.max(a[0], b[0]),
+            maxLat: Math.max(a[1], b[1]),
+          })
+          if (next) setAoi(next)
+          draftRef.current = []
+          setDrawMode('off')
+        }
+        return
+      }
+      draftRef.current.push(pt)
+    }
+    const onDbl = () => {
+      if (drawMode !== 'poly') return
+      const ring = draftRef.current
+      const next = sanitizeAoi({ kind: 'poly', ring })
+      if (next) setAoi(next)
+      draftRef.current = []
+      setDrawMode('off')
+    }
+    map.on('click', onClick)
+    map.on('dblclick', onDbl)
+    map.getCanvas().style.cursor = drawMode === 'off' ? '' : 'crosshair'
+    return () => {
+      map.off('click', onClick)
+      map.off('dblclick', onDbl)
+      if (map.getCanvas()) map.getCanvas().style.cursor = ''
+    }
+  }, [drawMode, failed, setAoi, setDrawMode, styleReady])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || failed || reducedMotion || !heatCells?.length) return
+    let dir = 1
+    let op = 0.28
+    const id = window.setInterval(() => {
+      if (!map.getLayer('heat-fill')) return
+      op += dir * 0.03
+      if (op > 0.42) dir = -1
+      if (op < 0.2) dir = 1
+      try {
+        map.setPaintProperty('heat-fill', 'fill-opacity', op)
+      } catch {
+        /* style may have swapped */
+      }
+    }, 180)
+    return () => window.clearInterval(id)
+  }, [heatCells, failed, reducedMotion, styleReady])
+
   if (failed) {
     return <OsmFallback lat={lat} lng={lng} label={label} />
   }
 
+  const fx =
+    overlay === 'flir' ? 'flir' : overlay === 'crt' ? 'crt' : overlay === 'nvg' || nvg ? 'nvg' : undefined
+
   return (
-    <div className={mapFxClass(nvg)}>
+    <div className={mapFxClass(nvg || overlay === 'nvg', fx)}>
       <div ref={ref} className="locality-map" role="region" aria-label={`Locality map: ${label}`} />
       {onMapStyle && onNvg && <MapStylePack style={mapStyle} nvg={nvg} onStyle={onMapStyle} onNvg={onNvg} />}
       <div className="map-attrib-note">{attributionFor(mapStyle)}</div>
-      {nvg && <div className="map-fx-nvg" aria-hidden="true" />}
+      {(nvg || overlay === 'nvg') && <div className="map-fx-nvg" aria-hidden="true" />}
+      {overlay === 'flir' && <div className="map-fx-flir" aria-hidden="true" />}
+      {overlay === 'crt' && <div className="map-fx-crt" aria-hidden="true" />}
     </div>
   )
 }
