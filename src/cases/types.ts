@@ -11,6 +11,15 @@ export type CasePin =
       extra?: string
       url?: string
     }
+  | {
+      type: 'ticker'
+      id: string
+      label: string
+      url: string
+      source: string
+      published?: string
+      feedId?: string
+    }
 
 export interface CaseRecord {
   id: string

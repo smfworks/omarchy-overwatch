@@ -1,6 +1,3 @@
-/** OpenFreeMap dark vector — no key, optional. Vector paint can fail on weak WebGL. */
-export const OPENFREEMAP_DARK = 'https://tiles.openfreemap.org/styles/dark'
-
 /** Public OSM raster — no key. Primary locality/storm basemap (roads, borders, labels). */
 export const OSM_RASTER_TILES = ['https://tile.openstreetmap.org/{z}/{x}/{y}.png']
 

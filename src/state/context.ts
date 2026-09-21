@@ -6,9 +6,11 @@ import type { Hotspot } from '../data/hotspots'
 import type { FeedPrefsV1 } from '../feeds/storage'
 import type { FeedRuntime, FeedStatus, TickerItem } from '../feeds/rss'
 import type { LayoutState, PanelId } from '../layout/storage'
-import type { GeoPoint, LayerState } from '../globe/layers'
+import type { GeoPoint, LayerState, LayerStatus } from '../globe/layers'
+import type { HeatCell } from '../heat/types'
+import type { BriefPrefsV1, BriefResult } from '../brief/types'
 
-export type StageMode = 'globe' | 'map' | 'storm' | 'depth'
+export type StageMode = 'globe' | 'map' | 'storm' | 'depth' | 'brief'
 
 export type CameraPov = { lat: number; lng: number; altitude: number }
 
@@ -17,6 +19,7 @@ export type Selection =
   | { kind: 'hotspot'; hotspot: Hotspot }
   | { kind: 'point'; point: GeoPoint }
   | { kind: 'ticker'; item: TickerItem }
+  | { kind: 'heat'; cell: HeatCell }
   | null
 
 export interface OverwatchState {
@@ -31,9 +34,15 @@ export interface OverwatchState {
   selectHotspot: (hotspot: Hotspot | null) => void
   selectPoint: (point: GeoPoint | null) => void
   selectTicker: (item: TickerItem | null) => void
+  selectHeat: (cell: HeatCell | null) => void
   layers: LayerState[]
   toggleLayer: (id: string) => void
   refreshLayers: () => void
+  heatEnabled: boolean
+  toggleHeat: () => void
+  heatStatus: LayerStatus
+  heatCells: HeatCell[]
+  heatNote: string
   ticker: TickerItem[]
   tickerStatus: FeedStatus
   tickerError: string | null
@@ -41,6 +50,10 @@ export interface OverwatchState {
   feedPrefs: FeedPrefsV1
   setFeedPrefs: Dispatch<SetStateAction<FeedPrefsV1>>
   refreshTicker: () => void
+  briefPrefs: BriefPrefsV1
+  setBriefPrefs: Dispatch<SetStateAction<BriefPrefsV1>>
+  brief: BriefResult
+  runBrief: () => void
   helpOpen: boolean
   setHelpOpen: (open: boolean) => void
   searchRef: RefObject<HTMLInputElement | null>
