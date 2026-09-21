@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Map, Marker, NavigationControl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { GeoPoint } from '../globe/types'
-import { BASEMAP_ATTRIBUTION, OPENFREEMAP_DARK, fetchRainViewerMaps, rainviewerTileUrl } from './basemap'
+import { BASEMAP_ATTRIBUTION, RASTER_DARK_STYLE, fetchRainViewerMaps, rainviewerTileUrl } from './basemap'
 import { OsmFallback } from './OsmFallback'
 import { weatherKindLabel } from './weather'
 
@@ -24,13 +24,13 @@ export function StormMap({ point }: { point: GeoPoint }) {
     try {
       map = new Map({
         container: el,
-        style: OPENFREEMAP_DARK,
+        style: RASTER_DARK_STYLE,
         center: [point.lng, point.lat],
         zoom: 6.4,
         keyboard: false,
         attributionControl: {
           compact: true,
-          customAttribution: `${BASEMAP_ATTRIBUTION} · radar RainViewer`,
+          customAttribution: `${BASEMAP_ATTRIBUTION} · radar RainViewer (public)`,
         },
       })
     } catch (err) {

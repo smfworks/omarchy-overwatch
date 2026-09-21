@@ -49,7 +49,7 @@ Case notes persist in `omarchy-overwatch.cases.v1`. Feed prefs persist in `omarc
 
 Dark glass HUD. Cyan/amber status language. Keyboard: `/`, `Esc`, `b`, `1–4`, `n`, `?`. Persist docks in `omarchy-overwatch.layout.v1`.
 
-Globe textures load from unpkg (`three-globe` example night earth). Offline machines will show an untextured globe; that is acceptable. Locality/storm maps use OpenFreeMap vector tiles (offline = empty map + honest ERR/empty, not invented streets).
+Globe textures load from unpkg (`three-globe` example night earth). Offline machines will show an untextured globe; that is acceptable. Locality/storm maps use public OpenStreetMap raster tiles (offline = empty map or OSM embed + honest ERR/empty, not invented streets).
 
 ## Commands
 

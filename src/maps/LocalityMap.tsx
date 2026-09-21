@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LngLatBounds, Map, Marker, NavigationControl, Popup } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { FeedGeometry } from '../globe/types'
-import { BASEMAP_ATTRIBUTION, OPENFREEMAP_DARK } from './basemap'
+import { BASEMAP_ATTRIBUTION, RASTER_DARK_STYLE } from './basemap'
 import { OsmFallback } from './OsmFallback'
 
 export function LocalityMap({
@@ -28,7 +28,7 @@ export function LocalityMap({
     try {
       map = new Map({
         container: el,
-        style: OPENFREEMAP_DARK,
+        style: RASTER_DARK_STYLE,
         center: [lng, lat],
         zoom: 10.2,
         keyboard: false,

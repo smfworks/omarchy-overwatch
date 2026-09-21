@@ -34,7 +34,7 @@ export function HelpOverlay() {
         </ul>
         <p className="disclaimer">
           Select a catalog card or ticker headline for an in-depth center view. Select a hotspot or live point to
-          zoom, then open a locality map (OpenFreeMap / OSM). Dangerous weather (NWS / EONET) opens a storm map
+          zoom, then open a locality map (OpenStreetMap tiles). Dangerous weather (NWS / EONET) opens a storm map
           with optional RainViewer radar. Status is LIVE / STALE / ERR / OFF — never invented intel. Passive vs
           active OPSEC is labeled per tool.
         </p>

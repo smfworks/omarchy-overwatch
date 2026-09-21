@@ -1,8 +1,24 @@
-/** OpenFreeMap dark vector style — no API key. Roads, borders, water, labels. */
+/** OpenFreeMap dark vector — no key, optional. Vector paint can fail on weak WebGL. */
 export const OPENFREEMAP_DARK = 'https://tiles.openfreemap.org/styles/dark'
 
-export const BASEMAP_ATTRIBUTION =
-  '© OpenFreeMap © OpenMapTiles © OpenStreetMap contributors'
+/** Public OSM raster — no key. Primary locality/storm basemap (roads, borders, labels). */
+export const OSM_RASTER_TILES = ['https://tile.openstreetmap.org/{z}/{x}/{y}.png']
+
+export const BASEMAP_ATTRIBUTION = '© OpenStreetMap contributors'
+
+export const RASTER_DARK_STYLE = {
+  version: 8 as const,
+  name: 'Overwatch OSM raster',
+  sources: {
+    osm: {
+      type: 'raster' as const,
+      tiles: OSM_RASTER_TILES,
+      tileSize: 256,
+      attribution: BASEMAP_ATTRIBUTION,
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
+}
 
 export const RAINVIEWER_MAPS_URL = '/proxy/rainviewer/public/weather-maps.json'
 

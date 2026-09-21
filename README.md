@@ -131,7 +131,7 @@ Dev and `vite preview` proxy `/proxy/*` so the browser can reach those APIs. Dir
 
 ### Locality map
 
-`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot or live point transitions into a **MapLibre GL** detail view using the free [OpenFreeMap](https://openfreemap.org/) dark style (OpenMapTiles + OpenStreetMap). No basemap API key. Attribution: © OpenFreeMap © OpenMapTiles © OpenStreetMap contributors.
+`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot or live point transitions into a **MapLibre GL** detail view on public [OpenStreetMap](https://www.openstreetmap.org/copyright) raster tiles (no API key). Attribution: © OpenStreetMap contributors. If tiles fail, the map is empty or falls back to the OSM embed — streets are never invented.
 
 If tiles fail, the map is empty — streets are never invented.
 
