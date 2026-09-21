@@ -1,5 +1,7 @@
 import { PRODUCT_NAME } from '../branding'
+import { HEAT_FORMULA_HELP } from '../heat/formula'
 import { useOverwatch } from '../state/context'
+import { BriefSettings } from './BriefSettings'
 
 export function HelpOverlay() {
   const { helpOpen, setHelpOpen } = useOverwatch()
@@ -20,7 +22,7 @@ export function HelpOverlay() {
             <kbd>Esc</kbd> close help → close case notes → back to globe → clear selection → clear query
           </li>
           <li>
-            <kbd>b</kbd> back to globe from map / storm / depth
+            <kbd>b</kbd> back to globe from map / storm / depth / brief
           </li>
           <li>
             <kbd>n</kbd> case notes drawer (local scratchpad)
@@ -38,6 +40,9 @@ export function HelpOverlay() {
           with optional RainViewer radar. Status is LIVE / STALE / ERR / OFF — never invented intel. Passive vs
           active OPSEC is labeled per tool.
         </p>
+        <div className="count-line">HEAT (attention)</div>
+        <p className="case-hint">{HEAT_FORMULA_HELP}</p>
+        <BriefSettings />
         <button className="btn" onClick={() => setHelpOpen(false)}>
           Close
         </button>

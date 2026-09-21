@@ -50,6 +50,17 @@ function sanitizePin(raw: unknown): CasePin | null {
     const extra = typeof row.extra === 'string' && row.extra.trim() ? row.extra.trim() : undefined
     return { type: 'point', id: id.slice(0, 120), label: label.slice(0, 160), lat, lng, kind, extra, url }
   }
+  if (type === 'ticker') {
+    const url = typeof row.url === 'string' ? row.url.trim() : ''
+    if (!url.startsWith('https://') && !url.startsWith('http://')) return null
+    const source = typeof row.source === 'string' && row.source.trim() ? row.source.trim().slice(0, 80) : 'feed'
+    const published = typeof row.published === 'string' && row.published.trim() ? row.published.trim() : undefined
+    const feedId = typeof row.feedId === 'string' && row.feedId.trim() ? row.feedId.trim().slice(0, 80) : undefined
+    const pin: CasePin = { type: 'ticker', id: id.slice(0, 120), label: label.slice(0, 240), url, source }
+    if (published) pin.published = published
+    if (feedId) pin.feedId = feedId
+    return pin
+  }
   return null
 }
 

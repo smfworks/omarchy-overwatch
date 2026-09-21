@@ -734,6 +734,8 @@ a {
 
 .help-card {
   width: min(640px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: auto;
   background: var(--panel-solid);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1174,6 +1176,47 @@ a {
   font-size: 12px;
   color: var(--amber);
   font-family: var(--mono);
+}
+
+.brief-banner {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--amber);
+  border: 1px solid rgba(232, 184, 74, 0.45);
+  background: rgba(232, 184, 74, 0.1);
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  line-height: 1.45;
+}
+
+.brief-body {
+  white-space: pre-wrap;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 16px;
+  max-width: 72ch;
+}
+
+.brief-settings {
+  margin: 12px 0 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.brief-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.brief-fields .case-label {
+  display: grid;
+  gap: 4px;
 }
 
 @media (max-width: 1100px) {

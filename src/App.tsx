@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EMPTY_FILTERS, filterTools, TOOLS, type CatalogFilters } from './catalog'
 import type { OsintTool } from './catalog/types'
-import { pinFromHotspot, pinFromPoint, pinFromTool } from './cases/pins'
+import { pinFromHotspot, pinFromPoint, pinFromTicker, pinFromTool } from './cases/pins'
 import {
   activeCase,
   addPin,
@@ -12,13 +12,20 @@ import {
   upsertCase,
 } from './cases/storage'
 import type { CaseStoreV1 } from './cases/types'
-import { type Hotspot } from './data/hotspots'
+import { HOTSPOTS, type Hotspot } from './data/hotspots'
 import { fetchTicker, type FeedRuntime, type FeedStatus, type TickerItem } from './feeds/rss'
 import { loadFeedPrefs, saveFeedPrefs, sanitizeFeedPrefs, type FeedPrefsV1 } from './feeds/storage'
 import { classifyStatus, LAYER_DEFS, type GeoPoint, type LayerState } from './globe/layers'
 import { DockLayout } from './layout/DockLayout'
 import { loadLayout, saveLayout, sanitizeLayout, type LayoutState, type PanelId } from './layout/storage'
 import { isDangerousWeather } from './maps/weather'
+import { briefConfigError, loadBriefPrefs, saveBriefPrefs, sanitizeBriefPrefs } from './brief/storage'
+import { requestBrief } from './brief/client'
+import { buildBriefSnapshot } from './brief/snapshot'
+import type { BriefPrefsV1, BriefResult } from './brief/types'
+import { loadHeatPrefs, saveHeatPrefs } from './heat/storage'
+import { classifyHeatStatus, heatStatusNote } from './heat/status'
+import type { HeatCell } from './heat/types'
 import { CaseNotesDrawer } from './panels/CaseNotesDrawer'
 import { CatalogPanel } from './panels/CatalogPanel'
 import { DetailPanel } from './panels/DetailPanel'
@@ -38,6 +45,15 @@ const LAYER_STALE_CHECK_MS = 30_000
 const TICKER_POLL_MS = 180_000
 const LOCALITY_ALTITUDE = 0.42
 const STAGE_AFTER_FLY_MS = 980
+
+const EMPTY_BRIEF: BriefResult = {
+  status: 'err',
+  text: null,
+  error: null,
+  model: null,
+  provider: null,
+  generatedAt: null,
+}
 
 function initialLayers(): LayerState[] {
   return LAYER_DEFS.map((def) => ({
@@ -62,6 +78,10 @@ function Provider({ children }: { children: ReactNode }) {
   const [tickerError, setTickerError] = useState<string | null>(null)
   const [tickerFeeds, setTickerFeeds] = useState<FeedRuntime[]>([])
   const [feedPrefs, setFeedPrefsState] = useState<FeedPrefsV1>(() => loadFeedPrefs())
+  const [heatEnabled, setHeatEnabled] = useState(() => loadHeatPrefs().enabled)
+  const [heatCells, setHeatCells] = useState<HeatCell[]>([])
+  const [briefPrefs, setBriefPrefsState] = useState<BriefPrefsV1>(() => loadBriefPrefs())
+  const [brief, setBrief] = useState<BriefResult>(EMPTY_BRIEF)
   const [helpOpen, setHelpOpen] = useState(false)
   const [flyTo, setFlyTo] = useState<CameraPov | null>(null)
   const [stage, setStage] = useState<StageMode>('globe')
@@ -73,9 +93,14 @@ function Provider({ children }: { children: ReactNode }) {
   const restorePovRef = useRef<CameraPov | null>(null)
   const stageTimerRef = useRef<number>(0)
   const selectionRef = useRef<Selection>(null)
+  const heatEnabledRef = useRef(heatEnabled)
+  const briefPrefsRef = useRef(briefPrefs)
+  const briefRunRef = useRef(0)
 
   layersRef.current = layers
   selectionRef.current = selection
+  heatEnabledRef.current = heatEnabled
+  briefPrefsRef.current = briefPrefs
 
   const setLayout = useCallback((next: LayoutState | ((prev: LayoutState) => LayoutState)) => {
     setLayoutState((prev) => sanitizeLayout(typeof next === 'function' ? next(prev) : next))
@@ -101,7 +126,51 @@ function Provider({ children }: { children: ReactNode }) {
     saveFeedPrefs(feedPrefs)
   }, [feedPrefs])
 
+  const setBriefPrefs = useCallback((next: BriefPrefsV1 | ((prev: BriefPrefsV1) => BriefPrefsV1)) => {
+    setBriefPrefsState((prev) => sanitizeBriefPrefs(typeof next === 'function' ? next(prev) : next))
+  }, [])
+
+  useEffect(() => {
+    saveBriefPrefs(briefPrefs)
+  }, [briefPrefs])
+
+  useEffect(() => {
+    saveHeatPrefs({ version: 1, enabled: heatEnabled })
+  }, [heatEnabled])
+
   const visibleTools = useMemo(() => filterTools(TOOLS, filters), [filters])
+
+  const heatStatus = useMemo(() => classifyHeatStatus(heatEnabled, layers), [heatEnabled, layers])
+  const heatNote = useMemo(() => heatStatusNote(heatStatus, heatCells.length), [heatStatus, heatCells.length])
+
+  useEffect(() => {
+    if (!heatEnabled) {
+      setHeatCells([])
+      return
+    }
+    let cancelled = false
+    void import('./heat/score').then(({ computeHeat, pointsFromLayers }) => {
+      if (cancelled) return
+      setHeatCells(
+        computeHeat(pointsFromLayers(layersRef.current), {
+          hotspots: HOTSPOTS.map((hs) => ({ id: hs.id, name: hs.name, lat: hs.lat, lng: hs.lng })),
+        }),
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [heatEnabled, layers])
+
+  useEffect(() => {
+    if (selection?.kind !== 'heat') return
+    const next = heatCells.find((c) => c.id === selection.cell.id)
+    if (!next) {
+      if (!heatEnabled || heatStatus === 'err') setSelection(null)
+      return
+    }
+    if (next !== selection.cell) setSelection({ kind: 'heat', cell: next })
+  }, [heatCells, heatEnabled, heatStatus, selection])
 
   const togglePanel = useCallback(
     (id: PanelId) => {
@@ -144,7 +213,8 @@ function Provider({ children }: { children: ReactNode }) {
         const sel = selectionRef.current
         const still =
           (sel?.kind === 'hotspot' && sel.hotspot.id === key) ||
-          (sel?.kind === 'point' && sel.point.id === key)
+          (sel?.kind === 'point' && sel.point.id === key) ||
+          (sel?.kind === 'heat' && sel.cell.id === key)
         if (still) {
           if (!restorePovRef.current && globePovRef.current) restorePovRef.current = globePovRef.current
           setStage(mode)
@@ -204,6 +274,27 @@ function Provider({ children }: { children: ReactNode }) {
     },
     [openStage],
   )
+
+  const selectHeat = useCallback(
+    (cell: HeatCell | null) => {
+      if (!cell) {
+        setSelection(null)
+        return
+      }
+      setSelection({ kind: 'heat', cell })
+      if (stage === 'map' || stage === 'storm') {
+        window.clearTimeout(stageTimerRef.current)
+        setStage('map')
+        return
+      }
+      scheduleLocality({ lat: cell.lat, lng: cell.lng, altitude: LOCALITY_ALTITUDE }, 'map', cell.id)
+    },
+    [scheduleLocality, stage],
+  )
+
+  const toggleHeat = useCallback(() => {
+    setHeatEnabled((prev) => !prev)
+  }, [])
 
   const loadLayer = useCallback(async (id: string) => {
     const def = LAYER_DEFS.find((d) => d.id === id)
@@ -339,6 +430,65 @@ function Provider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(id)
   }, [loadTicker])
 
+  const runBrief = useCallback(() => {
+    const prefs = briefPrefsRef.current
+    const cfgErr = briefConfigError(prefs)
+    if (cfgErr) {
+      setBrief({
+        status: 'err',
+        text: null,
+        error: cfgErr,
+        model: prefs.model || null,
+        provider: prefs.provider,
+        generatedAt: Date.now(),
+      })
+      openStage('brief')
+      if (!prefs.enabled) setHelpOpen(true)
+      return
+    }
+    const runId = ++briefRunRef.current
+    setBrief({
+      status: 'loading',
+      text: null,
+      error: null,
+      model: prefs.model,
+      provider: prefs.provider,
+      generatedAt: Date.now(),
+    })
+    openStage('brief')
+    const snapshot = buildBriefSnapshot({
+      stage: stage === 'brief' ? 'globe' : stage,
+      layers: layersRef.current,
+      heatEnabled: heatEnabledRef.current,
+      heatStatus: classifyHeatStatus(heatEnabledRef.current, layersRef.current),
+      heatCells,
+      selection: selectionRef.current,
+      ticker,
+    })
+    void requestBrief(prefs, snapshot).then((result) => {
+      if (briefRunRef.current !== runId) return
+      if (result.ok) {
+        setBrief({
+          status: 'live',
+          text: result.text,
+          error: null,
+          model: result.model,
+          provider: prefs.provider,
+          generatedAt: Date.now(),
+        })
+        return
+      }
+      setBrief({
+        status: 'err',
+        text: null,
+        error: result.error,
+        model: prefs.model,
+        provider: prefs.provider,
+        generatedAt: Date.now(),
+      })
+    })
+  }, [heatCells, openStage, stage, ticker])
+
   const pinSelection = useCallback(() => {
     setCaseStore((prev) => {
       const pin =
@@ -348,12 +498,14 @@ function Provider({ children }: { children: ReactNode }) {
             ? pinFromHotspot(selection.hotspot)
             : selection?.kind === 'point'
               ? pinFromPoint(selection.point)
-              : null
+              : selection?.kind === 'ticker'
+                ? pinFromTicker(selection.item)
+                : null
       if (!pin) return prev
       const rec = activeCase(prev) ?? createEmptyCase('Untitled case')
       return upsertCase(prev, addPin(rec, pin))
     })
-    if (selection && selection.kind !== 'ticker') setCasesDrawerOpen(true)
+    if (selection && selection.kind !== 'heat') setCasesDrawerOpen(true)
   }, [selection, setCaseStore])
 
   const focusSearch = useCallback(() => {
@@ -432,9 +584,15 @@ function Provider({ children }: { children: ReactNode }) {
     selectHotspot,
     selectPoint,
     selectTicker,
+    selectHeat,
     layers,
     toggleLayer,
     refreshLayers,
+    heatEnabled,
+    toggleHeat,
+    heatStatus,
+    heatCells,
+    heatNote,
     ticker,
     tickerStatus,
     tickerError,
@@ -442,6 +600,10 @@ function Provider({ children }: { children: ReactNode }) {
     feedPrefs,
     setFeedPrefs,
     refreshTicker: loadTicker,
+    briefPrefs,
+    setBriefPrefs,
+    brief,
+    runBrief,
     helpOpen,
     setHelpOpen,
     searchRef,

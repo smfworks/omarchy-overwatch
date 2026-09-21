@@ -2,6 +2,7 @@
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import { liveFeedsPlugin } from './vite.live-feeds'
+import { briefProxyPlugin } from './vite.brief-proxy'
 
 const proxy: Record<string, ProxyOptions> = {
   '/proxy/usgs': {
@@ -56,7 +57,16 @@ const proxy: Record<string, ProxyOptions> = {
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '')
   return {
-    plugins: [react(), liveFeedsPlugin(env)],
+    plugins: [react(), liveFeedsPlugin(env), briefProxyPlugin()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/h3-js')) return 'h3'
+          },
+        },
+      },
+    },
     server: {
       host: true,
       port: 5173,

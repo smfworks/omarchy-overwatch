@@ -52,10 +52,19 @@ describe('case notes storage', () => {
         { type: 'tool', id: 'bad', label: 'no url' },
         { type: 'point', id: 'ais-1', label: 'ghost ship', lat: 999, lng: 0, kind: 'vessel' },
         { type: 'hotspot', id: 'suez', label: 'Suez Canal', lat: 30.58, lng: 32.26 },
+        {
+          type: 'ticker',
+          id: 'bbc-1',
+          label: 'Public headline',
+          url: 'https://www.bbc.com/news',
+          source: 'BBC',
+        },
+        { type: 'ticker', id: 'bad', label: 'no url', source: 'x' },
       ],
     })
     expect(record?.name).toBe('Hormuz watch')
-    expect(record?.pins).toHaveLength(2)
+    expect(record?.pins).toHaveLength(3)
+    expect(record?.pins.some((p) => p.type === 'ticker' && p.label === 'Public headline')).toBe(true)
     expect(sanitizeStore({ version: 2, cases: [record] })).toEqual({ version: 1, activeId: null, cases: [] })
   })
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'react-globe.gl'
 import type { GlobeMethods } from 'react-globe.gl'
 import { HOTSPOTS, nearestHotspot } from '../data/hotspots'
+import { cellsToGlobePolygons, type HeatPolygon } from '../heat/geojson'
 import { useOverwatch } from '../state/context'
 import type { GeoPoint } from './layers'
 
@@ -42,7 +43,18 @@ function webglAvailable(): boolean {
 }
 
 export function OverwatchGlobe() {
-  const { layers, selectHotspot, selectPoint, flyTo, selection, reportGlobePov, stage } = useOverwatch()
+  const {
+    layers,
+    selectHotspot,
+    selectPoint,
+    selectHeat,
+    flyTo,
+    selection,
+    reportGlobePov,
+    stage,
+    heatEnabled,
+    heatCells,
+  } = useOverwatch()
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [dims, setDims] = useState({ width: 800, height: 600 })
@@ -82,6 +94,7 @@ export function OverwatchGlobe() {
 
   const selectedId = selection?.kind === 'point' ? selection.point.id : null
   const selectedHotspotId = selection?.kind === 'hotspot' ? selection.hotspot.id : null
+  const selectedHeatId = selection?.kind === 'heat' ? selection.cell.id : null
 
   const liveMarkers = useMemo<Marker[]>(() => {
     return layers.flatMap((layer) =>
@@ -149,6 +162,10 @@ export function OverwatchGlobe() {
   }, [liveMarkers, selection])
 
   const liveCount = liveMarkers.length
+  const heatPolys = useMemo(
+    () => (heatEnabled ? cellsToGlobePolygons(heatCells, selectedHeatId) : []),
+    [heatEnabled, heatCells, selectedHeatId],
+  )
 
   if (!webgl) {
     return (
@@ -211,6 +228,20 @@ export function OverwatchGlobe() {
             }
           }
         }}
+        polygonsData={heatPolys}
+        polygonLabel="name"
+        polygonGeoJsonGeometry="geometry"
+        polygonCapColor={(d: object) => (d as HeatPolygon).color}
+        polygonSideColor={() => 'rgba(8, 14, 24, 0.12)'}
+        polygonStrokeColor={(d: object) => (d as HeatPolygon).stroke}
+        polygonAltitude={(d: object) => (d as HeatPolygon).altitude}
+        polygonCapCurvatureResolution={6}
+        polygonsTransitionDuration={0}
+        onPolygonClick={(d: object) => {
+          const poly = d as HeatPolygon
+          const cell = heatCells.find((c) => c.id === poly.id)
+          if (cell) selectHeat(cell)
+        }}
         ringsData={rings}
         ringLat="lat"
         ringLng="lng"
@@ -225,9 +256,13 @@ export function OverwatchGlobe() {
           ? `lock: ${selection.hotspot.name}`
           : selection?.kind === 'point'
             ? `lock: ${selection.point.label}`
-            : liveCount
-              ? `${liveCount} live highlights · drag to orbit · click a point`
-              : 'drag to orbit · scroll to zoom · click a beacon'}
+            : selection?.kind === 'heat'
+              ? `heat: L=${selection.cell.layerCount} · ${selection.cell.id}`
+              : heatEnabled && heatPolys.length
+                ? `${heatPolys.length} attention cells · click a hex`
+                : liveCount
+                  ? `${liveCount} live highlights · drag to orbit · click a point`
+                  : 'drag to orbit · scroll to zoom · click a beacon'}
       </div>
     </div>
   )

@@ -49,6 +49,7 @@ export function CaseNotesDrawer() {
     selectTool,
     selectHotspot,
     selectPoint,
+    selectTicker,
     pinSelection,
   } = useOverwatch()
   const current = activeCase(caseStore)
@@ -120,6 +121,17 @@ export function CaseNotesDrawer() {
       else selectPoint({ id: pin.id, lat: pin.lat, lng: pin.lng, label: pin.label, kind: 'event' })
       return
     }
+    if (pin.type === 'ticker') {
+      selectTicker({
+        id: pin.id,
+        title: pin.label,
+        url: pin.url,
+        source: pin.source,
+        published: pin.published ?? null,
+        feedId: pin.feedId ?? 'pinned',
+      })
+      return
+    }
     selectPoint({
       id: pin.id,
       lat: pin.lat,
@@ -134,7 +146,8 @@ export function CaseNotesDrawer() {
     if (!selection) return 'Open a catalog card, hotspot, or live point, then pin it. Pins store ids/labels/coords only.'
     if (selection.kind === 'tool') return `Pin ${selection.tool.name}`
     if (selection.kind === 'hotspot') return `Pin ${selection.hotspot.name}`
-    if (selection.kind === 'ticker') return 'Headlines cannot be pinned — open a catalog card or live point.'
+    if (selection.kind === 'ticker') return `Pin headline “${selection.item.title}” (title/link/date only)`
+    if (selection.kind === 'heat') return 'Heat cells cannot be pinned — pin a contributing event instead.'
     return `Pin ${selection.point.label}`
   }, [selection])
 
@@ -282,7 +295,7 @@ export function CaseNotesDrawer() {
               )}
               <div className="count-line">Pins · {current.pins.length}</div>
               <p className="case-hint">{pinHint}</p>
-              <button type="button" className="btn ghost" onClick={pinSelection} disabled={!selection} style={{ marginBottom: 10 }}>
+              <button type="button" className="btn ghost" onClick={pinSelection} disabled={!selection || selection.kind === 'heat'} style={{ marginBottom: 10 }}>
                 Pin current selection
               </button>
               {current.pins.length === 0 && (
@@ -297,7 +310,7 @@ export function CaseNotesDrawer() {
                     <p>
                       {pin.type}
                       {'lat' in pin ? ` · ${pin.lat.toFixed(2)}°, ${pin.lng.toFixed(2)}°` : ''}
-                      {pin.type === 'tool' ? ` · ${pin.url}` : ''}
+                      {pin.type === 'tool' || pin.type === 'ticker' ? ` · ${pin.url}` : ''}
                     </p>
                   </button>
                   <button

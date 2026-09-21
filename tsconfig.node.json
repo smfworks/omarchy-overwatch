@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["vite.config.ts", "vite.live-feeds.ts"]
+  "include": ["vite.config.ts", "vite.live-feeds.ts", "vite.brief-proxy.ts"]
 }

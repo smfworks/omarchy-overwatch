@@ -1,5 +1,6 @@
 import type { OsintTool } from '../catalog/types'
 import type { Hotspot } from '../data/hotspots'
+import type { TickerItem } from '../feeds/rss'
 import type { GeoPoint } from '../globe/types'
 import type { CasePin } from './types'
 
@@ -29,4 +30,17 @@ export function pinFromPoint(point: GeoPoint): CasePin {
     extra: point.extra,
     url: `https://www.openstreetmap.org/?mlat=${point.lat}&mlon=${point.lng}#map=6/${point.lat}/${point.lng}`,
   }
+}
+
+export function pinFromTicker(item: TickerItem): CasePin {
+  const pin: CasePin = {
+    type: 'ticker',
+    id: item.id,
+    label: item.title,
+    url: item.url,
+    source: item.source,
+  }
+  if (item.published) pin.published = item.published
+  if (item.feedId) pin.feedId = item.feedId
+  return pin
 }

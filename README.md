@@ -97,7 +97,7 @@ Docks persist in `localStorage` (`omarchy-overwatch.layout.v1`):
 
 Resize the inner edges. Hide with the × buttons or keys `1` `2` `3` `4`. Reset with the home icon.
 
-Selecting a catalog card or ticker headline opens an **in-depth center stage** (replacing the globe) with every field we already know. Selecting a hotspot or live point flies the globe into that locality, then opens a **map detail mode**. **← Globe** (or `Esc` / `b`) restores the globe and prior camera when we still have it.
+Selecting a catalog card or ticker headline opens an **in-depth center stage** (replacing the globe) with every field we already know. Selecting a hotspot, live point, or attention cell flies the globe into that locality, then opens a **map detail mode**. **← Globe** (or `Esc` / `b`) restores the globe and prior camera when we still have it.
 
 ## Keyboard
 
@@ -105,7 +105,7 @@ Selecting a catalog card or ticker headline opens an **in-depth center stage** (
 | --- | --- |
 | `/` | Focus catalog search |
 | `Esc` | Close help → close case notes → back to globe → clear selection → clear query |
-| `b` | Back to globe from map / storm / depth |
+| `b` | Back to globe from map / storm / depth / brief |
 | `1` / `2` / `3` / `4` | Toggle left / right / top / bottom |
 | `n` | Case notes drawer |
 | `?` | Help overlay |
@@ -131,20 +131,42 @@ Dev and `vite preview` proxy `/proxy/*` so the browser can reach those APIs. Dir
 
 ### Locality map
 
-`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot or live point transitions into a **MapLibre GL** detail view on public [OpenStreetMap](https://www.openstreetmap.org/copyright) raster tiles (no API key). Attribution: © OpenStreetMap contributors. If tiles fail, the map is empty or falls back to the OSM embed — streets are never invented.
-
-If tiles fail, the map is empty — streets are never invented.
+`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot, live point, or attention cell transitions into a **MapLibre GL** detail view on public [OpenStreetMap](https://www.openstreetmap.org/copyright) raster tiles (no API key). Attribution: © OpenStreetMap contributors. If tiles fail, the map is empty or falls back to the OSM embed — streets are never invented.
 
 ### Storm map
 
 When a selected live point is **dangerous weather** (NWS event types or EONET severe-storms: hurricane / tropical cyclone, tornado, blizzard / winter storm, severe thunderstorm, flash flood), the center opens a storm map:
 
-- OpenFreeMap basemap
+- OpenStreetMap raster basemap (same as locality — no OpenFreeMap style is wired; vector paint was dropped because weak WebGL failed)
 - NWS alert geometry when the feed sent it
 - Optional [RainViewer](https://www.rainviewer.com/api.html) public radar mosaic (`/proxy/rainviewer`) — no key
 - Alert headline / area / severity only when present
 
 Radar **ERR** / empty leaves the alert text and geometry in place. Nothing is synthesized.
+
+### HEAT (attention)
+
+**HEAT** in the status strip is an optional client-side overlay (off by default). It does **not** invent points or produce a classified sitrep.
+
+- Grid: Uber [H3](https://h3geo.org/) resolution **4** (~1,770 km² cells) via `h3-js` (code-split).
+- A cell is drawn only when **L ≥ 2**: **L** is the count of distinct **enabled** live/stale layers (USGS, EONET, ADS-B, NWS, AIS, FIRMS) that already have a real feed point in that cell in the **current in-memory poll**.
+- Color maps from **L** (2 cyan, 3 amber, 4+ red). The dossier also shows **z = (L − mean L) / population σ** among currently drawn attention cells (`z = 0` if fewer than two cells or σ is 0). No ML ranker, no hidden weights.
+- Demo hotspots that fall in the same cell are listed as navigation geography and **do not count toward L**.
+- Status is **LIVE / STALE / ERR / OFF**. HEAT is **ERR** when fewer than two live layers are enabled. Zero overlapping cells is an honest empty LIVE overlay.
+- Click a cell on the locality map (primary) or the subtle globe hex overlay to open a dossier of contributing layers, point counts, and feed event ids/labels/coords copied from the poll.
+
+The same formula is in **Help (`?`)**.
+
+### On-screen brief (optional)
+
+**BRIEF** is off by default. Enable **On-screen brief** in Help (`?`):
+
+- **Local Ollama** at `http://127.0.0.1:11434` (probed via `/proxy/brief/ollama`)
+- **OpenAI-compatible HTTPS** (or http loopback): you paste the API base URL + key. Stored only in `localStorage` key `omarchy-overwatch.brief.v1`. Never committed. No bundled cloud key. Overwatch does **not** call any SMF-hosted LLM.
+
+The model receives a **structured JSON dump of what is currently on screen** (layer toggles/status, selection, heat-cell summary, capped live points and ticker headlines). The system prompt requires citing only those items, saying UNKNOWN when missing, and never inventing coordinates or events. Output opens in center stage with a **“model-generated from on-screen public feeds”** banner and **← Globe**. Missing key, Ollama down, or model errors show **ERR** and an empty brief.
+
+Dev/preview proxy: `POST /proxy/brief` (local Vite process only). Direct static hosting without the proxy will ERR — honest.
 
 ### Optional env keys
 
@@ -176,17 +198,19 @@ FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe s
 | `/proxy/gdacs` | `https://www.gdacs.org` |
 | `/proxy/rainviewer` | `https://api.rainviewer.com` (public weather-maps.json) |
 | `/proxy/rss?url=` | Generic RSS/Atom fetch (`http`/`https` only) |
+| `/proxy/brief` | Local-only BYOK / Ollama chat forwarder (no SMF LLM; key from `X-Overwatch-Brief-Key`) |
+| `/proxy/brief/ollama` | Probe `http://127.0.0.1:11434/api/tags` |
 
 ## News ticker
 
-Built-in BBC World, ReliefWeb, and GDACS remain. The ⚙ control lets you enable/disable each and add **custom RSS/Atom** URLs (`http`/`https` only). Prefs persist in `omarchy-overwatch.feeds.v1`. Each feed shows **LIVE / STALE / ERR / OFF**. Click a headline to open the depth view (title, source, date, link — no fetched article body).
+Built-in BBC World, ReliefWeb, and GDACS remain. The ⚙ control lets you enable/disable each and add **custom RSS/Atom** URLs (`http`/`https` only). Prefs persist in `omarchy-overwatch.feeds.v1`. Each feed shows **LIVE / STALE / ERR / OFF**. Click a headline to open the depth view (title, source, date, link — no fetched article body). **Pin to case** stores that title/link/date locally.
 
 ## Case notes
 
 Local-only investigation scratchpad. Open with **n**, the **N** control in the status strip, or **Pin to case** on a dossier.
 
 - Create / rename / delete cases
-- Pin catalog tools, demo hotspots, and live-layer points (stored as ids, labels, URLs/coordinates — not fabricated intel)
+- Pin catalog tools, demo hotspots, live-layer points, and ticker headlines (stored as ids, labels, URLs/coordinates — not fabricated intel)
 - Freeform notes (plaintext or light markdown; preview is local-only)
 - Persist in `localStorage` key `omarchy-overwatch.cases.v1`
 - Export / import one case as JSON
@@ -203,7 +227,7 @@ Schema: `id, name, category, subcategory?, url, description, tags[], opsec, pric
 
 ## Stack
 
-Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · MapLibre GL · custom dock layout · dark glass HUD CSS.
+Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · MapLibre GL · H3 (`h3-js`) · custom dock layout · dark glass HUD CSS.
 
 ## Development notes
 
@@ -211,4 +235,4 @@ See [AGENTS.md](AGENTS.md) for contributor guidance.
 
 ## Acknowledgements
 
-Taxonomy inspired by [OSINT Framework](https://osintframework.com/) (`arf.json`) and the [Bellingcat toolkit](https://bellingcat.gitbook.io/toolkit). Live-layer ideas from public USGS / EONET / OpenSky / NWS documentation. Basemap: OpenFreeMap / OpenMapTiles / OpenStreetMap. Radar mosaic: RainViewer public API. HUD language nods to community OSINT dashboards without copying their code or inventing their data.
+Taxonomy inspired by [OSINT Framework](https://osintframework.com/) (`arf.json`) and the [Bellingcat toolkit](https://bellingcat.gitbook.io/toolkit). Live-layer ideas from public USGS / EONET / OpenSky / NWS documentation. Basemap: OpenStreetMap raster tiles. Radar mosaic: RainViewer public API. Attention grid: Uber H3. HUD language nods to community OSINT dashboards without copying their code or inventing their data.

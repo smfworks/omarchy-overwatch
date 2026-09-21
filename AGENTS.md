@@ -18,8 +18,10 @@ A static OSINT **catalog + visualization HUD**. Ship launcher UX, not a recon en
 src/catalog/     types, tools.ts (source of truth), schema + vitest
 src/data/        static demo hotspots (geography only)
 src/globe/       react-globe.gl wrapper + public-feed adapters/parsers
-src/maps/        MapLibre locality + storm maps (OpenFreeMap / RainViewer)
-src/stage/       center stage (globe / map / storm / depth)
+src/heat/        H3 attention overlay (client-side score + MapLibre/globe)
+src/brief/       optional BYOK / Ollama on-screen brief (localStorage key only)
+src/maps/        MapLibre locality + storm maps (OSM raster / RainViewer)
+src/stage/       center stage (globe / map / storm / depth / brief)
 src/cases/       local case-notes store (localStorage, export/import)
 src/feeds/       RSS ticker (proxied) + custom feed prefs
 src/layout/      dock chrome + localStorage
@@ -37,19 +39,19 @@ scripts/         Omarchy install + desktop wrapper
 
 ## Feeds and layers
 
-Browser calls go through Vite `server.proxy` / `preview.proxy` plus `vite.live-feeds.ts` (`/proxy/usgs`, `/proxy/eonet`, `/proxy/opensky`, `/proxy/nws`, `/proxy/firms`, `/proxy/ais`, `/proxy/bbc`, `/proxy/reliefweb`, `/proxy/gdacs`, `/proxy/rainviewer`, `/proxy/rss`). Adding a source means adding a proxy or live-feed handler **and** an honest failure path.
+Browser calls go through Vite `server.proxy` / `preview.proxy` plus `vite.live-feeds.ts` and `vite.brief-proxy.ts` (`/proxy/usgs`, `/proxy/eonet`, `/proxy/opensky`, `/proxy/nws`, `/proxy/firms`, `/proxy/ais`, `/proxy/bbc`, `/proxy/reliefweb`, `/proxy/gdacs`, `/proxy/rainviewer`, `/proxy/rss`, `/proxy/brief`). Adding a source means adding a proxy or live-feed handler **and** an honest failure path.
 
 No API keys in the repo. Optional keys live in `.env` (see `.env.example`): `AISSTREAM_API_KEY`, `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET`, `OPENSKY_USERNAME` / `OPENSKY_PASSWORD`, `FIRMS_MAP_KEY`. Never commit secrets. If a feed needs a key and none is configured, show `ERR` / empty — do not invent geodata.
 
-OpenFreeMap and RainViewer public endpoints need no key. Custom RSS URLs must be `http`/`https` only.
+OpenStreetMap raster tiles and RainViewer public endpoints need no key. Custom RSS URLs must be `http`/`https` only.
 
-Case notes persist in `omarchy-overwatch.cases.v1`. Feed prefs persist in `omarchy-overwatch.feeds.v1`. Do not auto-fill notes or pins.
+Case notes persist in `omarchy-overwatch.cases.v1`. Feed prefs persist in `omarchy-overwatch.feeds.v1`. Heat toggle persists in `omarchy-overwatch.heat.v1`. Optional brief prefs/key persist in `omarchy-overwatch.brief.v1` (never commit). Do not auto-fill notes or pins.
 
 ## UI
 
 Dark glass HUD. Cyan/amber status language. Keyboard: `/`, `Esc`, `b`, `1–4`, `n`, `?`. Persist docks in `omarchy-overwatch.layout.v1`.
 
-Globe textures load from unpkg (`three-globe` example night earth). Offline machines will show an untextured globe; that is acceptable. Locality/storm maps use public OpenStreetMap raster tiles (offline = empty map or OSM embed + honest ERR/empty, not invented streets).
+Globe textures load from unpkg (`three-globe` example night earth). Offline machines will show an untextured globe; that is acceptable. Locality/storm maps use public OpenStreetMap raster tiles (offline = empty map or OSM embed + honest ERR/empty, not invented streets). HEAT is a documented H3 overlay (L = distinct live layers in a cell). On-screen brief is opt-in BYOK/Ollama only.
 
 ## Commands
 

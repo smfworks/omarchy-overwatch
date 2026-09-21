@@ -20,7 +20,25 @@ export function StatusStrip() {
     casesDrawerOpen,
     caseStore,
     refreshLayers,
+    heatEnabled,
+    toggleHeat,
+    heatStatus,
+    heatNote,
+    heatCells,
+    briefPrefs,
+    brief,
+    runBrief,
   } = useOverwatch()
+
+  const briefDot = !briefPrefs.enabled ? '' : brief.status === 'loading' ? 'loading' : brief.status
+  const briefLabel =
+    !briefPrefs.enabled
+      ? 'BRIEF'
+      : brief.status === 'loading'
+        ? 'BRIEF LOADING'
+        : brief.status === 'err'
+          ? 'BRIEF ERR'
+          : 'BRIEF'
   const [clock, setClock] = useState(utcClock)
 
   useEffect(() => {
@@ -60,6 +78,28 @@ export function StatusStrip() {
             {layer.enabled && layer.status !== 'live' && layer.status !== 'off' ? ` ${layer.status.toUpperCase()}` : ''}
           </button>
         ))}
+        <button
+          className={`layer-btn${heatEnabled ? ' on' : ''}`}
+          onClick={toggleHeat}
+          title={heatNote}
+        >
+          <span className={`status-dot ${heatEnabled ? heatStatus : ''}`} />
+          HEAT
+          {heatEnabled && heatStatus !== 'live' && heatStatus !== 'off' ? ` ${heatStatus.toUpperCase()}` : ''}
+          {heatEnabled && heatStatus === 'live' && heatCells.length ? ` ${heatCells.length}` : ''}
+        </button>
+        <button
+          className={`layer-btn${briefPrefs.enabled ? ' on' : ''}`}
+          onClick={runBrief}
+          title={
+            briefPrefs.enabled
+              ? brief.error || 'On-screen brief from public feeds currently shown. Off-by-default BYOK / Ollama.'
+              : 'On-screen brief is off. Enable it in Help (?). No bundled cloud key.'
+          }
+        >
+          <span className={`status-dot ${briefDot}`} />
+          {briefLabel}
+        </button>
         <button className="icon-btn" title="Refresh live layers" aria-label="Refresh live layers" onClick={refreshLayers}>
           ↻
         </button>

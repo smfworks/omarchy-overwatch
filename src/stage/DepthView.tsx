@@ -7,7 +7,7 @@ function openUrl(url: string) {
 }
 
 export function DepthView() {
-  const { selection, selectTool, pinSelection, openStage } = useOverwatch()
+  const { selection, selectTool, selectPoint, pinSelection, openStage, layers } = useOverwatch()
 
   if (!selection) {
     return (
@@ -81,6 +81,9 @@ export function DepthView() {
           <button className="btn" disabled={!item.url} onClick={() => item.url && openUrl(item.url)}>
             Open headline
           </button>
+          <button className="btn ghost" onClick={pinSelection}>
+            Pin to case
+          </button>
         </div>
         <div className="disclaimer">
           Title, link, and date are exactly what the RSS/Atom feed sent. No article body is fetched or summarized.
@@ -129,6 +132,62 @@ export function DepthView() {
         </div>
         <div className="disclaimer">
           Hotspots are static demo geography for navigation, not live intel. Coordinates are approximate.
+        </div>
+      </div>
+    )
+  }
+
+  if (selection.kind === 'heat') {
+    const cell = selection.cell
+    return (
+      <div className="depth-view">
+        <div className="depth-kicker">Attention cell · H3 r{cell.res}</div>
+        <h2>
+          L={cell.layerCount} distinct layers · {cell.pointCount} points
+        </h2>
+        <div className="coords">
+          {cell.lat.toFixed(4)}°, {cell.lng.toFixed(4)}° · {cell.id}
+        </div>
+        <dl className="kv">
+          <dt>Score L</dt>
+          <dd>{cell.score} = count of distinct enabled live/stale layers with a real point in this cell</dd>
+          <dt>z</dt>
+          <dd>{cell.z.toFixed(3)} = (L − mean L) / population σ among attention cells</dd>
+        </dl>
+        <div className="count-line">Layers</div>
+        {cell.contributors.map((c) => (
+          <p key={c.layerId}>
+            {c.layerLabel} ({c.layerId}): {c.count}
+          </p>
+        ))}
+        {cell.hotspots.length > 0 && (
+          <p>Demo geography in cell: {cell.hotspots.map((h) => h.name).join(', ')} (not counted in L).</p>
+        )}
+        <div className="count-line">Events from public feeds</div>
+        {cell.events.map((ev) => (
+          <button
+            key={ev.id}
+            className="tool-card"
+            onClick={() => {
+              for (const layer of layers) {
+                const pt = layer.points.find((p) => p.id === ev.id)
+                if (pt) selectPoint(pt)
+              }
+            }}
+          >
+            <h3>{ev.label}</h3>
+            <p>
+              {ev.layerLabel} · {ev.id} · {ev.lat.toFixed(3)}°, {ev.lng.toFixed(3)}°
+            </p>
+          </button>
+        ))}
+        <div className="actions">
+          <button className="btn" onClick={() => openStage('map')}>
+            Locality map
+          </button>
+        </div>
+        <div className="disclaimer">
+          Transparent local overlay. No ML score. Coordinates and labels are copied from the current poll only.
         </div>
       </div>
     )
