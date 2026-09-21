@@ -18,7 +18,7 @@ export const DEFAULT_LAYOUT: LayoutState = {
   bottom: true,
   leftWidth: 360,
   rightWidth: 380,
-  topHeight: 64,
+  topHeight: 84,
   bottomHeight: 52,
 }
 

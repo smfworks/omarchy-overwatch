@@ -108,13 +108,14 @@ Selecting a catalog card or ticker headline opens an **in-depth center stage** (
 | `b` | Back to globe from map / storm / depth / brief |
 | `1` / `2` / `3` / `4` | Toggle left / right / top / bottom |
 | `n` | Case notes drawer |
+| `[` / `]` | Cycle map basemap DEFAULT / SATELLITE / NIGHT |
 | `?` | Help overlay |
 
 ## Globe layers
 
 Toggles in the status strip. Status is **LIVE**, **STALE**, **ERR**, or **OFF** — never invented points.
 
-Enabled layers **poll** (about every two minutes). Glowing globe highlights are driven by the latest live/stale points (USGS, EONET, ADS-B, NWS, AIS, FIRMS). Curated demo beacons stay as navigation only.
+Enabled layers **poll** on their own cadence (about 45s–3 min). Glowing globe highlights are driven by the latest live/stale points. Curated demo beacons stay as navigation only. Add a row in `src/globe/registry.ts` to register a new public layer (fetch + poll + LIVE/STALE/ERR/OFF) — do not invent points.
 
 | Layer | Source | Key |
 | --- | --- | --- |
@@ -124,21 +125,38 @@ Enabled layers **poll** (about every two minutes). Glowing globe highlights are 
 | NWS | `api.weather.gov` (US) | none |
 | AIS | AISStream WebSocket snapshot (`stream.aisstream.io`) | `AISSTREAM_API_KEY` |
 | FIRMS | NASA FIRMS VIIRS 24h detections | optional `FIRMS_MAP_KEY` |
+| GDACS | GDACS SEARCH GeoJSON + feed bbox; sampled TC/FL polygons | none |
+| SAT | CelesTrak TLE sample (stations + visual), SGP4 in a Web Worker | none |
+| NHC | `nhc.noaa.gov/CurrentStorms.json` | none |
+| NIFC | WFIGS current incident perimeters (public ArcGIS GeoJSON) | none |
+| RW | ReliefWeb disasters API — only records with coordinates | none |
+
+**Tracks (ADS-B / AIS):** when a layer is LIVE or STALE, heading-aware chevrons are drawn if the feed sent heading/course. Short polylines come from a client ring buffer (capped samples per id, capped ids, antimeridian split). This is a **sampled** trail of polls Overwatch already made — not full-sky coverage, not a tracker product. Click a marker or trail to open the dossier with speed / course / altitude **only when the feed sent them**. OpenSky **401/429** and AIS missing-key **401** stay honest **ERR** with no invented tracks.
 
 Demo **hotspots** (Kyiv, Hormuz, Suez, Taiwan Strait, etc.) are static geography for navigation. Clicking one opens a dossier of related catalog tools, not a live situation report.
 
 Dev and `vite preview` proxy `/proxy/*` so the browser can reach those APIs. Direct static file hosting without the Vite preview proxy will show **ERR** on layers/feeds that lack CORS — that is expected and honest.
 
-### Locality map
+### Locality / storm maps (style pack)
 
-`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot, live point, or attention cell transitions into a **MapLibre GL** detail view on public [OpenStreetMap](https://www.openstreetmap.org/copyright) raster tiles (no API key). Attribution: © OpenStreetMap contributors. If tiles fail, the map is empty or falls back to the OSM embed — streets are never invented.
+`react-globe.gl` is weak for roads and borders at city scale, so a selected hotspot, live point, or attention cell transitions into a **MapLibre GL** detail view. Toggle **DEFAULT / SATELLITE / NIGHT** on the map (or HUD **MAP** chip, keys `[` `]`). Choice persists in `omarchy-overwatch.mapstyle.v1`.
+
+| Style | Tiles | Attribution | Notes |
+| --- | --- | --- | --- |
+| **DEFAULT** | Public [OpenStreetMap](https://www.openstreetmap.org/copyright) raster (`tile.openstreetmap.org`) | © OpenStreetMap contributors | Same keyless path as v2. No Mapbox / Google key. |
+| **SATELLITE** | [Esri World Imagery](https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9) raster | Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community | Keyless. If Esri 403s/fails, the map is empty — imagery is never invented. |
+| **NIGHT** | [OpenFreeMap](https://openfreemap.org/) dark vector (`tiles.openfreemap.org/styles/dark`) | © OpenFreeMap © OpenMapTiles © OpenStreetMap contributors | Live style URL (no frozen sprite host). Vector paint failure falls back to darkened OSM raster. |
+
+**NVG** is an optional green CSS overlay — aesthetic only, not a night-vision sensor. Offline / failed tiles: empty map or OSM embed. Streets are never invented.
+
+There is **no** Mapbox, Google Maps, or Stadia key in this HUD. OpenFreeMap is the dark vector source; OSM raster is the compliance-friendly default.
 
 ### Storm map
 
-When a selected live point is **dangerous weather** (NWS event types or EONET severe-storms: hurricane / tropical cyclone, tornado, blizzard / winter storm, severe thunderstorm, flash flood), the center opens a storm map:
+When a selected live point is **dangerous weather** (NWS event types, EONET severe-storms, NHC tropical cyclones, or a GDACS tropical cyclone label), the center opens a storm map:
 
-- OpenStreetMap raster basemap (same as locality — no OpenFreeMap style is wired; vector paint was dropped because weak WebGL failed)
-- NWS alert geometry when the feed sent it
+- The selected basemap style (same pack as locality)
+- NWS / GDACS alert geometry when the feed sent it
 - Optional [RainViewer](https://www.rainviewer.com/api.html) public radar mosaic (`/proxy/rainviewer`) — no key
 - Alert headline / area / severity only when present
 
@@ -149,7 +167,7 @@ Radar **ERR** / empty leaves the alert text and geometry in place. Nothing is sy
 **HEAT** in the status strip is an optional client-side overlay (off by default). It does **not** invent points or produce a classified sitrep.
 
 - Grid: Uber [H3](https://h3geo.org/) resolution **4** (~1,770 km² cells) via `h3-js` (code-split).
-- A cell is drawn only when **L ≥ 2**: **L** is the count of distinct **enabled** live/stale layers (USGS, EONET, ADS-B, NWS, AIS, FIRMS) that already have a real feed point in that cell in the **current in-memory poll**.
+- A cell is drawn only when **L ≥ 2**: **L** is the count of distinct **enabled** live/stale layers that already have a real feed point in that cell in the **current in-memory poll** (USGS, EONET, ADS-B, NWS, AIS, FIRMS, plus GDACS / SAT / NHC / NIFC / RW when those toggles are on).
 - Color maps from **L** (2 cyan, 3 amber, 4+ red). The dossier also shows **z = (L − mean L) / population σ** among currently drawn attention cells (`z = 0` if fewer than two cells or σ is 0). No ML ranker, no hidden weights.
 - Demo hotspots that fall in the same cell are listed as navigation geography and **do not count toward L**.
 - Status is **LIVE / STALE / ERR / OFF**. HEAT is **ERR** when fewer than two live layers are enabled. Zero overlapping cells is an honest empty LIVE overlay.
@@ -181,7 +199,7 @@ Copy [`.env.example`](.env.example) to `.env` (gitignored) and restart `npm run 
 
 OpenSky **401** (unauthorized) and **429** (rate limited) surface as **ERR** with that status — the globe does not paint placeholder aircraft. Anonymous OpenSky is often blocked.
 
-FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe stays usable. Same for AIS (unique MMSI cap) and ADS-B (stride sample).
+FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe stays usable. Same for AIS (unique MMSI cap), ADS-B (stride sample), SAT (stations + visual TLE groups), NIFC (largest current perimeters), and GDACS (event cap + a handful of polygons).
 
 ### Proxies
 
@@ -196,6 +214,10 @@ FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe s
 | `/proxy/bbc` | `https://feeds.bbci.co.uk` |
 | `/proxy/reliefweb` | `https://reliefweb.int` |
 | `/proxy/gdacs` | `https://www.gdacs.org` |
+| `/proxy/celestrak` | `https://celestrak.org` (TLE text) |
+| `/proxy/nhc` | `https://www.nhc.noaa.gov` |
+| `/proxy/nifc` | `https://services3.arcgis.com` (NIFC WFIGS) |
+| `/proxy/rwapi` | `https://api.reliefweb.int` |
 | `/proxy/rainviewer` | `https://api.rainviewer.com` (public weather-maps.json) |
 | `/proxy/rss?url=` | Generic RSS/Atom fetch (`http`/`https` only) |
 | `/proxy/brief` | Local-only BYOK / Ollama chat forwarder (no SMF LLM; key from `X-Overwatch-Brief-Key`) |
@@ -227,7 +249,9 @@ Schema: `id, name, category, subcategory?, url, description, tags[], opsec, pric
 
 ## Stack
 
-Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · MapLibre GL · H3 (`h3-js`) · custom dock layout · dark glass HUD CSS.
+Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · MapLibre GL · H3 (`h3-js`) · `satellite.js` (SAT worker) · custom dock layout · dark glass HUD CSS.
+
+Globe night/bump/star textures are bundled under `public/globe/` (from the `three-globe` example set) so the HUD does not fetch unpkg at runtime. Offline machines still get an untextured globe if local files fail — that is acceptable.
 
 ## Development notes
 
@@ -235,4 +259,4 @@ See [AGENTS.md](AGENTS.md) for contributor guidance.
 
 ## Acknowledgements
 
-Taxonomy inspired by [OSINT Framework](https://osintframework.com/) (`arf.json`) and the [Bellingcat toolkit](https://bellingcat.gitbook.io/toolkit). Live-layer ideas from public USGS / EONET / OpenSky / NWS documentation. Basemap: OpenStreetMap raster tiles. Radar mosaic: RainViewer public API. Attention grid: Uber H3. HUD language nods to community OSINT dashboards without copying their code or inventing their data.
+Taxonomy inspired by [OSINT Framework](https://osintframework.com/) (`arf.json`) and the [Bellingcat toolkit](https://bellingcat.gitbook.io/toolkit). Live-layer ideas from public USGS / EONET / OpenSky / NWS / GDACS / CelesTrak / NHC / NIFC documentation. Basemap: OpenStreetMap raster (default), Esri World Imagery (satellite, attributed), OpenFreeMap dark (night). Radar mosaic: RainViewer public API. Attention grid: Uber H3. HUD language nods to community OSINT dashboards without copying their code or inventing their data.

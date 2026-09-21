@@ -1,4 +1,6 @@
 import { describeLayerHttpError, parseAisSnapshot, parseFirmsCsv, parseOpenSkyStates } from './parse'
+import { attachGdacsPolygon, parseGdacsFeatureCollection, parseNhcCurrentStorms, parseNifcPerimeters, parseReliefWebDisasters } from './parse-geo'
+import { parseTleCatalog, propagateTleRecords } from './sgp4'
 import type { GeoPoint, LayerState, LayerStatus } from './types'
 
 export type { GeoPoint, LayerState, LayerStatus } from './types'
@@ -254,41 +256,99 @@ export async function fetchFirms(): Promise<GeoPoint[]> {
   throw new Error(errors.join(' · ') || 'FIRMS unavailable')
 }
 
-export const LAYER_DEFS = [
-  {
-    id: 'earthquakes',
-    label: 'USGS',
-    note: 'USGS earthquakes M2.5+ past 24h via earthquake.usgs.gov (no key).',
-    fetch: fetchEarthquakes,
-  },
-  {
-    id: 'eonet',
-    label: 'EONET',
-    note: 'NASA EONET open natural events (fires, storms, volcanoes).',
-    fetch: fetchEonet,
-  },
-  {
-    id: 'opensky',
-    label: 'ADS-B',
-    note: 'OpenSky sampled aircraft states. Optional OPENSKY_CLIENT_ID/SECRET (OAuth2) or OPENSKY_USERNAME/PASSWORD (legacy). Rate-limited; 401/429 are ERR, not fake tracks.',
-    fetch: fetchOpenSky,
-  },
-  {
-    id: 'nws',
-    label: 'NWS',
-    note: 'api.weather.gov active alerts. US-only, no key.',
-    fetch: fetchNwsAlerts,
-  },
-  {
-    id: 'ais',
-    label: 'AIS',
-    note: 'AISStream maritime snapshot. Requires AISSTREAM_API_KEY in .env. Sampled live positions only — never invented.',
-    fetch: fetchAis,
-  },
-  {
-    id: 'firms',
-    label: 'FIRMS',
-    note: 'NASA FIRMS VIIRS detections (public 24h CSV, or FIRMS_MAP_KEY API). Sampled by FRP; no invented fires.',
-    fetch: fetchFirms,
-  },
-] as const
+export async function fetchGdacs(): Promise<GeoPoint[]> {
+  const data = await fetchJson(
+    '/proxy/gdacs/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ,TC,FL,VO,DR,WF',
+    15000,
+    'gdacs',
+  )
+  const rows = parseGdacsFeatureCollection(data)
+  const sample = rows.filter((r) => r.geometryUrl && (r.point.eventType === 'TC' || r.point.eventType === 'FL')).slice(0, 5)
+  const attached = await Promise.all(
+    sample.map(async (row) => {
+      try {
+        const gj = await fetchJson(row.geometryUrl!, 10000, 'gdacs')
+        return attachGdacsPolygon(row.point, gj)
+      } catch {
+        return row.point
+      }
+    }),
+  )
+  const byId = new Map(attached.map((p) => [p.id, p]))
+  return rows.map((r) => byId.get(r.point.id) ?? r.point).map((p) => ({ ...p, layerId: 'gdacs' }))
+}
+
+async function propagateTleCatalog(records: ReturnType<typeof parseTleCatalog>): Promise<GeoPoint[]> {
+  const epochMs = Date.now()
+  if (typeof Worker === 'undefined') return propagateTleRecords(records, epochMs)
+  try {
+    const worker = new Worker(new URL('./sgp4.worker.ts', import.meta.url), { type: 'module' })
+    return await new Promise<GeoPoint[]>((resolve, reject) => {
+      const t = setTimeout(() => {
+        worker.terminate()
+        resolve(propagateTleRecords(records, epochMs))
+      }, 8000)
+      worker.onmessage = (ev: MessageEvent<{ ok?: boolean; points?: GeoPoint[]; error?: string }>) => {
+        clearTimeout(t)
+        worker.terminate()
+        if (ev.data?.ok && Array.isArray(ev.data.points)) resolve(ev.data.points)
+        else reject(new Error(ev.data?.error || 'SGP4 worker failed'))
+      }
+      worker.onerror = () => {
+        clearTimeout(t)
+        worker.terminate()
+        resolve(propagateTleRecords(records, epochMs))
+      }
+      worker.postMessage({ records, epochMs })
+    })
+  } catch {
+    return propagateTleRecords(records, epochMs)
+  }
+}
+
+export async function fetchCelestrak(): Promise<GeoPoint[]> {
+  const stations = await fetchText('/proxy/celestrak/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', 15000, 'celestrak')
+  let visual = ''
+  try {
+    visual = await fetchText('/proxy/celestrak/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle', 15000, 'celestrak')
+  } catch {
+    /* stations-only sample is still honest */
+  }
+  const records = [...parseTleCatalog(stations, 24), ...parseTleCatalog(visual, 36)]
+  if (!records.length) throw new Error('CelesTrak returned no TLEs — no satellite positions were invented.')
+  const points = await propagateTleCatalog(records)
+  return points.map((p) => ({ ...p, layerId: 'celestrak' }))
+}
+
+export async function fetchNhc(): Promise<GeoPoint[]> {
+  const data = await fetchJson('/proxy/nhc/CurrentStorms.json', 12000, 'nhc')
+  return parseNhcCurrentStorms(data).map((p) => ({ ...p, layerId: 'nhc' }))
+}
+
+const NIFC_QUERY =
+  '/proxy/nifc/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,poly_IncidentName,poly_GISAcres,poly_DateCurrent&orderByFields=poly_GISAcres%20DESC&resultRecordCount=24&f=geojson&outSR=4326'
+
+const NIFC_QUERY_PLAIN =
+  '/proxy/nifc/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?where=1%3D1&outFields=OBJECTID,poly_IncidentName,poly_GISAcres,poly_DateCurrent&resultRecordCount=24&f=geojson&outSR=4326'
+
+export async function fetchNifc(): Promise<GeoPoint[]> {
+  try {
+    const data = await fetchJson(NIFC_QUERY, 20000, 'nifc')
+    const points = parseNifcPerimeters(data)
+    if (points.length) return points.map((p) => ({ ...p, layerId: 'nifc' }))
+  } catch {
+    /* retry without orderBy */
+  }
+  const data = await fetchJson(NIFC_QUERY_PLAIN, 20000, 'nifc')
+  return parseNifcPerimeters(data).map((p) => ({ ...p, layerId: 'nifc' }))
+}
+
+export async function fetchReliefWeb(): Promise<GeoPoint[]> {
+  const data = await fetchJson(
+    '/proxy/rwapi/v1/disasters?appname=omarchy-overwatch&profile=full&limit=40&sort%5B%5D=date%3Adesc',
+    15000,
+    'reliefweb',
+  )
+  const points = parseReliefWebDisasters(data)
+  return points.map((p) => ({ ...p, layerId: 'reliefweb' }))
+}

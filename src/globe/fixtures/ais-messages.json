@@ -3,7 +3,7 @@
     {
       "MessageType": "PositionReport",
       "MetaData": { "MMSI": 368207620, "ShipName": "DEMO SHIP", "Latitude": 33.72, "Longitude": -118.2 },
-      "Message": { "PositionReport": { "UserID": 368207620, "Latitude": 33.72, "Longitude": -118.2 } }
+      "Message": { "PositionReport": { "UserID": 368207620, "Latitude": 33.72, "Longitude": -118.2, "Cog": 180, "Sog": 12.5, "TrueHeading": 175 } }
     },
     {
       "MessageType": "PositionReport",

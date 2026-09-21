@@ -28,6 +28,8 @@ export function StatusStrip() {
     briefPrefs,
     brief,
     runBrief,
+    mapStyle,
+    cycleMapStyle,
   } = useOverwatch()
 
   const briefDot = !briefPrefs.enabled ? '' : brief.status === 'loading' ? 'loading' : brief.status
@@ -102,6 +104,13 @@ export function StatusStrip() {
         </button>
         <button className="icon-btn" title="Refresh live layers" aria-label="Refresh live layers" onClick={refreshLayers}>
           ↻
+        </button>
+        <button
+          className="layer-btn on"
+          onClick={() => cycleMapStyle(1)}
+          title={`Basemap ${mapStyle.toUpperCase()}. [ and ] cycle DEFAULT / SATELLITE / NIGHT. Attribution on the map.`}
+        >
+          MAP {mapStyle.toUpperCase()}
         </button>
       </div>
       <button

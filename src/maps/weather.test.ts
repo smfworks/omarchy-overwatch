@@ -14,7 +14,8 @@ describe('dangerous weather classification', () => {
     expect(isDangerousWeather(pt({ kind: 'alert', label: 'Winter Storm Warning' }))).toBe(true)
     expect(isDangerousWeather(pt({ kind: 'alert', label: 'Severe Thunderstorm Warning' }))).toBe(true)
     expect(isDangerousWeather(pt({ kind: 'alert', label: 'Flash Flood Warning' }))).toBe(true)
-    expect(isDangerousWeather(pt({ kind: 'alert', label: 'Tropical Storm Watch' }))).toBe(true)
+    expect(isDangerousWeather(pt({ kind: 'alert', label: 'TS Fay', eventType: 'Tropical Storm' }))).toBe(true)
+    expect(isDangerousWeather(pt({ kind: 'hazard', label: 'Orange Tropical Cyclone SAUDEL-26', eventType: 'TC' }))).toBe(true)
   })
 
   it('flags EONET severe storms from category, not from invented labels', () => {

@@ -347,7 +347,41 @@ export function DetailPanel() {
         {pt.headline && <p>{pt.headline}</p>}
         {pt.extra && <p>{pt.extra}</p>}
         {pt.detail && <p>{pt.detail.slice(0, 400)}{pt.detail.length > 400 ? '…' : ''}</p>}
-        <p>Fetched from a public feed. If a layer is STALE or ERR, treat this as unverified leftover data.</p>
+        {(pt.heading != null || pt.course != null || pt.speedMs != null || pt.speedKt != null || pt.altitudeM != null) && (
+          <dl className="kv">
+            {pt.heading != null && (
+              <>
+                <dt>Heading</dt>
+                <dd>{pt.heading.toFixed(0)}°</dd>
+              </>
+            )}
+            {pt.course != null && pt.course !== pt.heading && (
+              <>
+                <dt>Course</dt>
+                <dd>{pt.course.toFixed(0)}°</dd>
+              </>
+            )}
+            {pt.speedMs != null && (
+              <>
+                <dt>Speed</dt>
+                <dd>{pt.speedMs.toFixed(1)} m/s{pt.speedMs >= 0 ? ` · ${(pt.speedMs * 1.94384).toFixed(0)} kt` : ''}</dd>
+              </>
+            )}
+            {pt.speedKt != null && (
+              <>
+                <dt>Speed</dt>
+                <dd>{pt.speedKt.toFixed(1)} kt</dd>
+              </>
+            )}
+            {pt.altitudeM != null && (
+              <>
+                <dt>Altitude</dt>
+                <dd>{Math.round(pt.altitudeM)} m{pt.onGround ? ' · on ground' : ''}</dd>
+              </>
+            )}
+          </dl>
+        )}
+        <p>Fetched from a public feed. If a layer is STALE or ERR, treat this as unverified leftover data. ADS-B/AIS trails are sampled polls, not full-sky coverage.</p>
         <div className="actions">
           {storm && stage !== 'storm' && (
             <button className="btn" onClick={() => openStage('storm')}>
