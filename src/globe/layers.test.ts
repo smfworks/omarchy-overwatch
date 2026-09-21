@@ -35,6 +35,10 @@ describe('OpenSky parser', () => {
       extra: 'United Kingdom',
       lat: 51.47,
       lng: -0.45,
+      heading: 90,
+      speedMs: 200,
+      altitudeM: 10000,
+      onGround: false,
     })
   })
 
@@ -55,13 +59,15 @@ describe('AIS parser', () => {
       label: 'EXAMPLE STAR',
       lat: 25.77,
       lng: -80.13,
+      heading: 88,
+      speedKt: 11.2,
     })
     expect(points[1].label).toBe('MMSI 211476060')
   })
 
   it('extracts AISStream envelopes without fabricating a ship', () => {
     const fromMeta = extractAisVessel(aisMessages.messages[0])
-    expect(fromMeta).toMatchObject({ mmsi: '368207620', name: 'DEMO SHIP', lat: 33.72, lng: -118.2 })
+    expect(fromMeta).toMatchObject({ mmsi: '368207620', name: 'DEMO SHIP', lat: 33.72, lng: -118.2, heading: 175, course: 180, speedKt: 12.5 })
     expect(extractAisVessel(aisMessages.messages[2])).toBeNull()
     const points = parseAisSnapshot(aisMessages)
     expect(points).toHaveLength(2)

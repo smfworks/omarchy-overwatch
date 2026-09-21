@@ -42,7 +42,16 @@ function asFiniteNumber(value: unknown): number | null {
   return null
 }
 
-function vesselFromAisMessage(message: unknown): { mmsi?: string; name?: string; lat: number; lng: number; extra?: string } | null {
+function vesselFromAisMessage(message: unknown): {
+  mmsi?: string
+  name?: string
+  lat: number
+  lng: number
+  extra?: string
+  heading?: number
+  course?: number
+  speedKt?: number
+} | null {
   if (!message || typeof message !== 'object') return null
   const msg = message as {
     error?: unknown
@@ -64,7 +73,22 @@ function vesselFromAisMessage(message: unknown): { mmsi?: string; name?: string;
   const nameRaw = meta.ShipName ?? meta.shipName
   const name = typeof nameRaw === 'string' ? nameRaw.trim() || undefined : undefined
   const extra = [type || undefined, mmsi ? `MMSI ${mmsi}` : undefined].filter(Boolean).join(' · ')
-  return { mmsi, name, lat, lng, extra: extra || undefined }
+  const heading = asFiniteNumber(body?.TrueHeading ?? body?.trueHeading ?? body?.Heading)
+  const course = asFiniteNumber(body?.Cog ?? body?.COG ?? body?.Course)
+  const speedKt = asFiniteNumber(body?.Sog ?? body?.SOG ?? body?.Speed)
+  const headingOk = heading !== null && heading >= 0 && heading < 360
+  const courseOk = course !== null && course >= 0 && course < 360
+  const speedOk = speedKt !== null && speedKt >= 0 && speedKt < 102.3
+  return {
+    mmsi,
+    name,
+    lat,
+    lng,
+    extra: extra || undefined,
+    heading: headingOk ? heading : courseOk ? course : undefined,
+    course: courseOk ? course : undefined,
+    speedKt: speedOk ? speedKt : undefined,
+  }
 }
 
 function wsDataToString(data: unknown): string {

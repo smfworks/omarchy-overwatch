@@ -52,6 +52,38 @@ const proxy: Record<string, ProxyOptions> = {
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/proxy\/rainviewer/, ''),
   },
+  '/proxy/celestrak': {
+    target: 'https://celestrak.org',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/proxy\/celestrak/, ''),
+    headers: {
+      'User-Agent': 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)',
+      Accept: 'text/plain, application/json, */*',
+    },
+  },
+  '/proxy/nhc': {
+    target: 'https://www.nhc.noaa.gov',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/proxy\/nhc/, ''),
+    headers: {
+      'User-Agent': 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)',
+      Accept: 'application/json',
+    },
+  },
+  '/proxy/nifc': {
+    target: 'https://services3.arcgis.com',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/proxy\/nifc/, ''),
+  },
+  '/proxy/rwapi': {
+    target: 'https://api.reliefweb.int',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/proxy\/rwapi/, ''),
+    headers: {
+      'User-Agent': 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)',
+      Accept: 'application/json',
+    },
+  },
 }
 
 export default defineConfig(({ mode }) => {
@@ -63,6 +95,17 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules/h3-js')) return 'h3'
+            if (id.includes('node_modules/maplibre-gl')) return 'maplibre'
+            if (id.includes('node_modules/satellite.js')) return 'sgp4'
+            if (
+              id.includes('node_modules/three') ||
+              id.includes('node_modules/three-globe') ||
+              id.includes('node_modules/react-globe.gl') ||
+              id.includes('node_modules/globe.gl')
+            ) {
+              return 'globe'
+            }
+            if (id.includes('/src/brief/')) return 'brief'
           },
         },
       },

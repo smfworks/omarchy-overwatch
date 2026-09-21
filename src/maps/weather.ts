@@ -30,7 +30,7 @@ function haystack(point: Pick<GeoPoint, 'kind' | 'eventType' | 'label' | 'headli
 export function isDangerousWeather(
   point: Pick<GeoPoint, 'kind' | 'eventType' | 'label' | 'headline' | 'categories'>,
 ): boolean {
-  if (point.kind !== 'alert' && point.kind !== 'event') return false
+  if (point.kind !== 'alert' && point.kind !== 'event' && point.kind !== 'hazard') return false
   const text = haystack(point)
   if (DANGEROUS_PATTERNS.some((re) => re.test(text))) return true
   const cats = (point.categories ?? []).map((c) => c.toLowerCase().replace(/[_-]+/g, ' ').trim())

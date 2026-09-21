@@ -2,13 +2,28 @@ import { useEffect, useRef, useState } from 'react'
 import { Map, Marker, NavigationControl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { GeoPoint } from '../globe/types'
-import { BASEMAP_ATTRIBUTION, RASTER_DARK_STYLE, fetchRainViewerMaps, rainviewerTileUrl } from './basemap'
+import { fetchRainViewerMaps, rainviewerTileUrl } from './basemap'
+import { MapStylePack } from './MapStylePack'
+import { mapFxClass } from './markers'
 import { OsmFallback } from './OsmFallback'
+import { NIGHT_RASTER_FALLBACK, attributionFor, styleSpecFor, type MapStyleId } from './styles'
 import { weatherKindLabel } from './weather'
 
 type RadarState = 'loading' | 'live' | 'err' | 'empty'
 
-export function StormMap({ point }: { point: GeoPoint }) {
+export function StormMap({
+  point,
+  mapStyle = 'default',
+  nvg = false,
+  onMapStyle,
+  onNvg,
+}: {
+  point: GeoPoint
+  mapStyle?: MapStyleId
+  nvg?: boolean
+  onMapStyle?: (id: MapStyleId) => void
+  onNvg?: (on: boolean) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [radar, setRadar] = useState<{ status: RadarState; error: string | null; time: string | null }>({
     status: 'loading',
@@ -21,16 +36,17 @@ export function StormMap({ point }: { point: GeoPoint }) {
     const el = ref.current
     if (!el || mapFailed) return
     let map: Map
+    let nightFellBack = false
     try {
       map = new Map({
         container: el,
-        style: RASTER_DARK_STYLE,
+        style: styleSpecFor(mapStyle),
         center: [point.lng, point.lat],
         zoom: 6.4,
         keyboard: false,
         attributionControl: {
           compact: true,
-          customAttribution: `${BASEMAP_ATTRIBUTION} · radar RainViewer (public)`,
+          customAttribution: `${attributionFor(mapStyle)} · radar RainViewer (public)`,
         },
       })
     } catch (err) {
@@ -40,6 +56,16 @@ export function StormMap({ point }: { point: GeoPoint }) {
     }
     map.on('error', (ev) => {
       const msg = ev.error instanceof Error ? ev.error.message : 'map error'
+      if (mapStyle === 'night' && !nightFellBack && /openfreemap|sprite|glyph|ajax|tile/i.test(msg)) {
+        nightFellBack = true
+        try {
+          map.setStyle(NIGHT_RASTER_FALLBACK)
+        } catch {
+          setMapFailed(msg)
+          setRadar({ status: 'err', error: msg, time: null })
+        }
+        return
+      }
       if (/webgl|context/i.test(msg)) {
         setMapFailed(msg)
         setRadar({ status: 'err', error: msg, time: null })
@@ -122,15 +148,17 @@ export function StormMap({ point }: { point: GeoPoint }) {
         /* MapLibre can throw if the WebGL context was already lost */
       }
     }
-  }, [point, mapFailed])
+  }, [point, mapFailed, mapStyle])
 
   return (
-    <div className="storm-map-wrap">
+    <div className={`storm-map-wrap ${mapFxClass(nvg)}`}>
       {mapFailed ? (
         <OsmFallback lat={point.lat} lng={point.lng} zoom={7} label={weatherKindLabel(point)} />
       ) : (
         <div ref={ref} className="locality-map" role="region" aria-label={`Storm map: ${weatherKindLabel(point)}`} />
       )}
+      {onMapStyle && onNvg && <MapStylePack style={mapStyle} nvg={nvg} onStyle={onMapStyle} onNvg={onNvg} />}
+      {nvg && <div className="map-fx-nvg" aria-hidden="true" />}
       <aside className="storm-dossier" aria-live="polite">
         <div className="storm-kicker">
           Dangerous weather
@@ -167,8 +195,8 @@ export function StormMap({ point }: { point: GeoPoint }) {
           <p className="disclaimer">RainViewer returned no frames. Alert geometry (if the feed sent it) still shows.</p>
         )}
         <p className="disclaimer">
-          NWS / EONET text only when the feed provided it. RainViewer is a public mosaic, not a forecast. Basemap:{' '}
-          {BASEMAP_ATTRIBUTION}.
+          NWS / EONET / NHC text only when the feed provided it. RainViewer is a public mosaic, not a forecast. Basemap:{' '}
+          {attributionFor(mapStyle)}. NVG is an aesthetic overlay only.
         </p>
       </aside>
     </div>

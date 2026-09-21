@@ -7,8 +7,10 @@ import type { FeedPrefsV1 } from '../feeds/storage'
 import type { FeedRuntime, FeedStatus, TickerItem } from '../feeds/rss'
 import type { LayoutState, PanelId } from '../layout/storage'
 import type { GeoPoint, LayerState, LayerStatus } from '../globe/layers'
+import type { TrackTrail } from '../globe/tracks'
 import type { HeatCell } from '../heat/types'
 import type { BriefPrefsV1, BriefResult } from '../brief/types'
+import type { MapStyleId } from '../maps/styles'
 
 export type StageMode = 'globe' | 'map' | 'storm' | 'depth' | 'brief'
 
@@ -68,6 +70,12 @@ export interface OverwatchState {
   casesDrawerOpen: boolean
   setCasesDrawerOpen: Dispatch<SetStateAction<boolean>>
   pinSelection: () => void
+  mapStyle: MapStyleId
+  setMapStyle: (id: MapStyleId) => void
+  mapNvg: boolean
+  setMapNvg: (on: boolean) => void
+  cycleMapStyle: (dir: 1 | -1) => void
+  trails: TrackTrail[]
 }
 
 export const OverwatchContext = createContext<OverwatchState | null>(null)

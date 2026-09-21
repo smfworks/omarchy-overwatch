@@ -9,7 +9,7 @@ export const HEAT_FORMULA_HELP = `Attention heat is a local overlay, not a class
 
 Grid: Uber H3 hexagons at resolution ${HEAT_RES} (average cell area about 1,770 km²). Only the current in-memory poll is used — the same points already on USGS, EONET, ADS-B, NWS, AIS, and FIRMS when those toggles are LIVE or STALE (loading keeps leftover points). Demo hotspots that fall in a cell are listed as navigation geography and do not count toward the score.
 
-Score L = number of distinct live-layer ids with at least one real feed point in the cell. A cell is drawn only when L ≥ ${HEAT_MIN_LAYERS}. Color/intensity maps from L (2 cyan, 3 amber, 4+ red). A z-score of L versus the mean L of currently drawn attention cells is shown in the dossier: z = (L − mean) / population σ; z is 0 when there are fewer than two cells or σ is 0. No ML ranker, no hidden weights, no invented coordinates.`
+Score L = number of distinct live-layer ids with at least one real feed point in the cell. A cell is drawn only when L ≥ ${HEAT_MIN_LAYERS}. Color/intensity maps from L (2 cyan, 3 amber, 4+ red). A z-score of L versus the mean L of currently drawn attention cells is shown in the dossier: z = (L − mean) / population σ; z is 0 when there are fewer than two cells or σ is 0. No ML ranker, no hidden weights, no invented coordinates. Extra live layers (GDACS, SAT, NHC, NIFC, RW) count toward L the same way when they are LIVE or STALE.`
 
 export function heatFillColor(layerCount: number, selected = false): string {
   const alpha = selected ? 0.42 : 0.22

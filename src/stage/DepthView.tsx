@@ -226,6 +226,36 @@ export function DepthView() {
             <dd>{pt.observedAt}</dd>
           </>
         )}
+        {pt.heading != null && (
+          <>
+            <dt>Heading</dt>
+            <dd>{pt.heading.toFixed(0)}°</dd>
+          </>
+        )}
+        {pt.course != null && pt.course !== pt.heading && (
+          <>
+            <dt>Course</dt>
+            <dd>{pt.course.toFixed(0)}°</dd>
+          </>
+        )}
+        {pt.speedMs != null && (
+          <>
+            <dt>Speed</dt>
+            <dd>{pt.speedMs.toFixed(1)} m/s · {(pt.speedMs * 1.94384).toFixed(0)} kt</dd>
+          </>
+        )}
+        {pt.speedKt != null && (
+          <>
+            <dt>Speed (SOG)</dt>
+            <dd>{pt.speedKt.toFixed(1)} kt</dd>
+          </>
+        )}
+        {pt.altitudeM != null && (
+          <>
+            <dt>Altitude</dt>
+            <dd>{Math.round(pt.altitudeM)} m{pt.onGround ? ' · on ground' : ''}</dd>
+          </>
+        )}
         {pt.areaDesc && (
           <>
             <dt>Area</dt>

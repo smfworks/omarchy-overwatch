@@ -20,6 +20,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-globe.gl": "^2.35.0",
+    "satellite.js": "^5.0.0",
     "three": "^0.179.1"
   },
   "devDependencies": {

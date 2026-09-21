@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
-import { OverwatchGlobe } from '../globe/OverwatchGlobe'
-import { LocalityMap } from '../maps/LocalityMap'
-import { StormMap } from '../maps/StormMap'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { colorForKind } from '../globe/colors'
 import { useOverwatch } from '../state/context'
-import { BriefView } from './BriefView'
-import { DepthView } from './DepthView'
 import { StageErrorBoundary } from './StageErrorBoundary'
+
+const OverwatchGlobe = lazy(() => import('../globe/OverwatchGlobe').then((m) => ({ default: m.OverwatchGlobe })))
+const LocalityMap = lazy(() => import('../maps/LocalityMap').then((m) => ({ default: m.LocalityMap })))
+const StormMap = lazy(() => import('../maps/StormMap').then((m) => ({ default: m.StormMap })))
+const BriefView = lazy(() => import('./BriefView').then((m) => ({ default: m.BriefView })))
+const DepthView = lazy(() => import('./DepthView').then((m) => ({ default: m.DepthView })))
 
 function stageTitle(mode: string, label: string | null): string {
   if (mode === 'map') return label ? `Locality · ${label}` : 'Locality map'
@@ -15,13 +17,12 @@ function stageTitle(mode: string, label: string | null): string {
   return 'Globe'
 }
 
-function markerColorForKind(kind: string): string {
-  if (kind === 'quake') return '#ff8a3d'
-  if (kind === 'aircraft') return '#8b9cff'
-  if (kind === 'alert') return '#ff5d6c'
-  if (kind === 'vessel') return '#4cc9f0'
-  if (kind === 'fire') return '#ff7a3d'
-  return '#3ee0c8'
+function StageFallback() {
+  return (
+    <div className="stage-fallback">
+      Loading stage module… no geodata is invented while this pane is empty.
+    </div>
+  )
 }
 
 export function CenterStage() {
@@ -34,6 +35,11 @@ export function CenterStage() {
     selectHeat,
     selectPoint,
     layers,
+    mapStyle,
+    setMapStyle,
+    mapNvg,
+    setMapNvg,
+    trails,
   } = useOverwatch()
   const [globeOn, setGlobeOn] = useState(stage === 'globe')
 
@@ -68,7 +74,8 @@ export function CenterStage() {
             lng: selection.point.lng,
             label: selection.point.label,
             geometry: selection.point.geometry,
-            color: selection.point.kind === 'alert' ? '#ff5d6c' : '#3ee0c8',
+            color: colorForKind(selection.point.kind),
+            heading: selection.point.heading,
           }
         : selection?.kind === 'heat'
           ? {
@@ -87,9 +94,16 @@ export function CenterStage() {
       lat: ev.lat,
       lng: ev.lng,
       label: `${ev.layerLabel}: ${ev.label}`,
-      color: markerColorForKind(ev.kind),
+      color: colorForKind(ev.kind),
     }))
   }, [selection])
+
+  const mapTrails = useMemo(() => {
+    if (selection?.kind === 'point') {
+      return trails.filter((t) => t.id === selection.point.id || t.id.startsWith(`${selection.point.id}·`))
+    }
+    return trails.slice(0, 40)
+  }, [selection, trails])
 
   const onHeatClick = (id: string) => {
     const cell = heatCells.find((c) => c.id === id)
@@ -113,29 +127,45 @@ export function CenterStage() {
       <span className="corner bl" />
       <span className="corner br" />
       <StageErrorBoundary onReset={goBack}>
-        {stage === 'globe' && globeOn ? (
-          <div className="stage-globe">
-            <OverwatchGlobe />
-          </div>
-        ) : null}
-        {stage === 'map' && geo && (
-          <LocalityMap
-            lat={geo.lat}
-            lng={geo.lng}
-            label={geo.label}
-            geometry={'geometry' in geo ? geo.geometry : undefined}
-            markerColor={'color' in geo ? geo.color : '#3ee0c8'}
-            heatCells={mapHeat}
-            selectedHeatId={selection?.kind === 'heat' ? selection.cell.id : null}
-            onHeatClick={heatEnabled ? onHeatClick : undefined}
-            extraMarkers={extraMarkers}
-            onMarkerClick={onMarkerClick}
-            fitHeat={selection?.kind === 'heat'}
-          />
-        )}
-        {stage === 'storm' && selection?.kind === 'point' && <StormMap point={selection.point} />}
-        {stage === 'depth' && <DepthView />}
-        {stage === 'brief' && <BriefView />}
+        <Suspense fallback={<StageFallback />}>
+          {stage === 'globe' && globeOn ? (
+            <div className="stage-globe">
+              <OverwatchGlobe />
+            </div>
+          ) : null}
+          {stage === 'map' && geo && (
+            <LocalityMap
+              lat={geo.lat}
+              lng={geo.lng}
+              label={geo.label}
+              geometry={'geometry' in geo ? geo.geometry : undefined}
+              markerColor={'color' in geo ? geo.color : '#3ee0c8'}
+              heatCells={mapHeat}
+              selectedHeatId={selection?.kind === 'heat' ? selection.cell.id : null}
+              onHeatClick={heatEnabled ? onHeatClick : undefined}
+              extraMarkers={extraMarkers}
+              onMarkerClick={onMarkerClick}
+              fitHeat={selection?.kind === 'heat'}
+              mapStyle={mapStyle}
+              nvg={mapNvg}
+              onMapStyle={setMapStyle}
+              onNvg={setMapNvg}
+              trails={mapTrails}
+              heading={'heading' in geo ? geo.heading : undefined}
+            />
+          )}
+          {stage === 'storm' && selection?.kind === 'point' && (
+            <StormMap
+              point={selection.point}
+              mapStyle={mapStyle}
+              nvg={mapNvg}
+              onMapStyle={setMapStyle}
+              onNvg={setMapNvg}
+            />
+          )}
+          {stage === 'depth' && <DepthView />}
+          {stage === 'brief' && <BriefView />}
+        </Suspense>
       </StageErrorBoundary>
       {stage !== 'globe' && (
         <div className="stage-chrome">

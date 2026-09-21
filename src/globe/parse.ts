@@ -32,13 +32,22 @@ export function describeLayerHttpError(status: number, layer?: string, detail?: 
   return hint ? `HTTP ${status} — ${hint}` : `HTTP ${status}`
 }
 
-function asFiniteNumber(value: unknown): number | null {
+export function asFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) {
     const n = Number(value)
     if (Number.isFinite(n)) return n
   }
   return null
+}
+
+/** Degrees 0–360 when the feed sent a real heading/course; drops AIS 511 / 360 sentinels. */
+export function asHeadingDeg(value: unknown): number | null {
+  const n = asFiniteNumber(value)
+  if (n === null) return null
+  if (n < 0 || n > 360) return null
+  if (n === 511 || n === 360) return null
+  return n
 }
 
 function asLabel(value: unknown, fallback: string): string {
@@ -77,6 +86,15 @@ export function parseOpenSkyStates(
       kind: 'aircraft',
     }
     if (typeof row[2] === 'string' && row[2].trim()) point.extra = row[2].trim()
+    const heading = asHeadingDeg(row[10])
+    if (heading !== null) point.heading = heading
+    const speedMs = asFiniteNumber(row[9])
+    if (speedMs !== null && speedMs >= 0) point.speedMs = speedMs
+    const alt = asFiniteNumber(row[7]) ?? asFiniteNumber(row[13])
+    if (alt !== null) point.altitudeM = alt
+    if (typeof row[8] === 'boolean') point.onGround = row[8]
+    const ts = asFiniteNumber(row[4]) ?? asFiniteNumber(row[3])
+    if (ts !== null && ts > 1_000_000_000) point.observedAt = new Date(ts * 1000).toISOString()
     points.push(point)
     if (points.length >= limit) break
   }
@@ -89,6 +107,9 @@ export interface AisVesselRecord {
   lat: number
   lng: number
   extra?: string
+  heading?: number
+  course?: number
+  speedKt?: number
 }
 
 export function extractAisVessel(message: unknown): AisVesselRecord | null {
@@ -111,12 +132,18 @@ export function extractAisVessel(message: unknown): AisVesselRecord | null {
   const mmsi = asLabel(meta.MMSI ?? meta.mmsi ?? body?.UserID ?? body?.UserId, '')
   const name = asLabel(meta.ShipName ?? meta.shipName ?? meta.Ship_Name, '')
   const extra = [type || undefined, mmsi ? `MMSI ${mmsi}` : undefined].filter(Boolean).join(' · ')
+  const heading = asHeadingDeg(body?.TrueHeading ?? body?.trueHeading ?? body?.Heading ?? meta.TrueHeading)
+  const course = asHeadingDeg(body?.Cog ?? body?.COG ?? body?.Course ?? meta.Cog)
+  const speedKt = asFiniteNumber(body?.Sog ?? body?.SOG ?? body?.Speed ?? meta.Sog)
   return {
     mmsi: mmsi || undefined,
     name: name || undefined,
     lat,
     lng,
     extra: extra || undefined,
+    heading: heading ?? course ?? undefined,
+    course: course ?? undefined,
+    speedKt: speedKt !== null && speedKt >= 0 && speedKt < 102.3 ? speedKt : undefined,
   }
 }
 
@@ -135,12 +162,18 @@ export function parseAisSnapshot(data: unknown, limit = 80): GeoPoint[] {
       const lng = asFiniteNumber(v.lng)
       if (lat === null || lng === null) continue
       if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue
+      const heading = asHeadingDeg(v.heading)
+      const course = asHeadingDeg(v.course)
+      const speedKt = asFiniteNumber(v.speedKt)
       records.push({
         mmsi: typeof v.mmsi === 'string' ? v.mmsi : undefined,
         name: typeof v.name === 'string' ? v.name.trim() : undefined,
         lat,
         lng,
         extra: typeof v.extra === 'string' ? v.extra : undefined,
+        heading: heading ?? undefined,
+        course: course ?? undefined,
+        speedKt: speedKt !== null && speedKt >= 0 ? speedKt : undefined,
       })
     }
   } else if (Array.isArray(root.messages)) {
@@ -155,14 +188,18 @@ export function parseAisSnapshot(data: unknown, limit = 80): GeoPoint[] {
     const key = rec.mmsi || `${rec.lat.toFixed(4)},${rec.lng.toFixed(4)}`
     if (seen.has(key)) continue
     seen.add(key)
-    points.push({
+    const point: GeoPoint = {
       id: `ais-${rec.mmsi || `${rec.lat.toFixed(3)}-${rec.lng.toFixed(3)}`}`,
       lat: rec.lat,
       lng: rec.lng,
       label: rec.name || (rec.mmsi ? `MMSI ${rec.mmsi}` : 'vessel'),
       kind: 'vessel',
       extra: rec.extra,
-    })
+    }
+    if (rec.heading != null) point.heading = rec.heading
+    if (rec.course != null) point.course = rec.course
+    if (rec.speedKt != null) point.speedKt = rec.speedKt
+    points.push(point)
     if (points.length >= limit) break
   }
   return points

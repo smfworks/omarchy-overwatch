@@ -15,10 +15,14 @@ import type { CaseStoreV1 } from './cases/types'
 import { HOTSPOTS, type Hotspot } from './data/hotspots'
 import { fetchTicker, type FeedRuntime, type FeedStatus, type TickerItem } from './feeds/rss'
 import { loadFeedPrefs, saveFeedPrefs, sanitizeFeedPrefs, type FeedPrefsV1 } from './feeds/storage'
-import { classifyStatus, LAYER_DEFS, type GeoPoint, type LayerState } from './globe/layers'
+import { classifyStatus, type GeoPoint, type LayerState } from './globe/layers'
+import { LAYER_DEFS } from './globe/registry'
+import { clearTracksForLayer, ingestTrackPoints, trailsFromBuffer, type TrackTrail } from './globe/tracks'
 import { DockLayout } from './layout/DockLayout'
 import { loadLayout, saveLayout, sanitizeLayout, type LayoutState, type PanelId } from './layout/storage'
 import { isDangerousWeather } from './maps/weather'
+import { cycleMapStyleId, type MapStyleId } from './maps/styles'
+import { loadMapStylePrefs, saveMapStylePrefs } from './maps/storage'
 import { briefConfigError, loadBriefPrefs, saveBriefPrefs, sanitizeBriefPrefs } from './brief/storage'
 import { requestBrief } from './brief/client'
 import { buildBriefSnapshot } from './brief/snapshot'
@@ -40,7 +44,6 @@ import {
   type StageMode,
 } from './state/context'
 
-const LAYER_POLL_MS = 120_000
 const LAYER_STALE_CHECK_MS = 30_000
 const TICKER_POLL_MS = 180_000
 const LOCALITY_ALTITUDE = 0.42
@@ -59,8 +62,8 @@ function initialLayers(): LayerState[] {
   return LAYER_DEFS.map((def) => ({
     id: def.id,
     label: def.label,
-    enabled: def.id === 'earthquakes' || def.id === 'eonet',
-    status: def.id === 'earthquakes' || def.id === 'eonet' ? 'loading' : 'off',
+    enabled: Boolean(def.defaultOn),
+    status: def.defaultOn ? 'loading' : 'off',
     updatedAt: null,
     error: null,
     points: [],
@@ -87,6 +90,9 @@ function Provider({ children }: { children: ReactNode }) {
   const [stage, setStage] = useState<StageMode>('globe')
   const [caseStore, setCaseStoreState] = useState<CaseStoreV1>(() => loadCases())
   const [casesDrawerOpen, setCasesDrawerOpen] = useState(false)
+  const [mapStyle, setMapStyleState] = useState<MapStyleId>(() => loadMapStylePrefs().style)
+  const [mapNvg, setMapNvgState] = useState(() => loadMapStylePrefs().nvg)
+  const [trails, setTrails] = useState<TrackTrail[]>([])
   const searchRef = useRef<HTMLInputElement | null>(null)
   const layersRef = useRef(layers)
   const globePovRef = useRef<CameraPov | null>(null)
@@ -137,6 +143,22 @@ function Provider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveHeatPrefs({ version: 1, enabled: heatEnabled })
   }, [heatEnabled])
+
+  useEffect(() => {
+    saveMapStylePrefs({ version: 1, style: mapStyle, nvg: mapNvg })
+  }, [mapStyle, mapNvg])
+
+  const setMapStyle = useCallback((id: MapStyleId) => {
+    setMapStyleState(id)
+  }, [])
+
+  const setMapNvg = useCallback((on: boolean) => {
+    setMapNvgState(on)
+  }, [])
+
+  const cycleMapStyle = useCallback((dir: 1 | -1) => {
+    setMapStyleState((prev) => cycleMapStyleId(prev, dir))
+  }, [])
 
   const visibleTools = useMemo(() => filterTools(TOOLS, filters), [filters])
 
@@ -305,6 +327,10 @@ function Provider({ children }: { children: ReactNode }) {
     try {
       const points = await def.fetch()
       const updatedAt = Date.now()
+      if (def.id === 'opensky' || def.id === 'ais') {
+        ingestTrackPoints(def.id, points, updatedAt)
+        setTrails(trailsFromBuffer(updatedAt))
+      }
       setLayers((prev) =>
         prev.map((l) =>
           l.id === id
@@ -346,6 +372,10 @@ function Provider({ children }: { children: ReactNode }) {
       if (!current) return
       if (current.enabled) {
         setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: false, status: 'off' } : l)))
+        if (id === 'opensky' || id === 'ais') {
+          clearTracksForLayer(id)
+          setTrails(trailsFromBuffer())
+        }
         return
       }
       void loadLayer(id)
@@ -360,16 +390,18 @@ function Provider({ children }: { children: ReactNode }) {
   }, [loadLayer])
 
   useEffect(() => {
-    void loadLayer('earthquakes')
-    void loadLayer('eonet')
+    for (const def of LAYER_DEFS) {
+      if (def.defaultOn) void loadLayer(def.id)
+    }
   }, [loadLayer])
 
   useEffect(() => {
-    const poll = window.setInterval(() => {
-      for (const layer of layersRef.current) {
-        if (layer.enabled) void loadLayer(layer.id)
-      }
-    }, LAYER_POLL_MS)
+    const timers = LAYER_DEFS.map((def) =>
+      window.setInterval(() => {
+        const layer = layersRef.current.find((l) => l.id === def.id)
+        if (layer?.enabled) void loadLayer(def.id)
+      }, def.pollMs),
+    )
     const stale = window.setInterval(() => {
       setLayers((prev) =>
         prev.map((l) =>
@@ -388,7 +420,7 @@ function Provider({ children }: { children: ReactNode }) {
       )
     }, LAYER_STALE_CHECK_MS)
     return () => {
-      window.clearInterval(poll)
+      timers.forEach((id) => window.clearInterval(id))
       window.clearInterval(stale)
     }
   }, [loadLayer])
@@ -397,7 +429,7 @@ function Provider({ children }: { children: ReactNode }) {
     if (selection?.kind !== 'point') return
     for (const layer of layers) {
       const pt = layer.points.find((p) => p.id === selection.point.id)
-      if (pt && (pt.extra !== selection.point.extra || pt.headline !== selection.point.headline || pt.lat !== selection.point.lat)) {
+      if (pt && (pt.extra !== selection.point.extra || pt.headline !== selection.point.headline || pt.lat !== selection.point.lat || pt.heading !== selection.point.heading || pt.speedMs !== selection.point.speedMs || pt.speedKt !== selection.point.speedKt || pt.altitudeM !== selection.point.altitudeM)) {
         setSelection({ kind: 'point', point: pt })
         return
       }
@@ -567,10 +599,18 @@ function Provider({ children }: { children: ReactNode }) {
       if (e.key === '2') togglePanel('right')
       if (e.key === '3') togglePanel('top')
       if (e.key === '4') togglePanel('bottom')
+      if (e.key === '[') {
+        e.preventDefault()
+        cycleMapStyle(-1)
+      }
+      if (e.key === ']') {
+        e.preventDefault()
+        cycleMapStyle(1)
+      }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [casesDrawerOpen, filters.query, focusSearch, goBack, helpOpen, selection, stage, togglePanel])
+  }, [casesDrawerOpen, cycleMapStyle, filters.query, focusSearch, goBack, helpOpen, selection, stage, togglePanel])
 
   const value = {
     layout,
@@ -618,6 +658,12 @@ function Provider({ children }: { children: ReactNode }) {
     casesDrawerOpen,
     setCasesDrawerOpen,
     pinSelection,
+    mapStyle,
+    setMapStyle,
+    mapNvg,
+    setMapNvg,
+    cycleMapStyle,
+    trails,
   }
 
   return <OverwatchContext.Provider value={value}>{children}</OverwatchContext.Provider>

@@ -22,7 +22,9 @@ function pointKind(kind: string): GeoPoint['kind'] {
     kind === 'aircraft' ||
     kind === 'alert' ||
     kind === 'vessel' ||
-    kind === 'fire'
+    kind === 'fire' ||
+    kind === 'sat' ||
+    kind === 'hazard'
   ) {
     return kind
   }

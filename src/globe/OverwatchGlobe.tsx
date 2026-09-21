@@ -4,11 +4,13 @@ import type { GlobeMethods } from 'react-globe.gl'
 import { HOTSPOTS, nearestHotspot } from '../data/hotspots'
 import { cellsToGlobePolygons, type HeatPolygon } from '../heat/geojson'
 import { useOverwatch } from '../state/context'
+import { colorForKind } from './colors'
 import type { GeoPoint } from './layers'
+import type { TrackTrail } from './tracks'
 
-const NIGHT = '//unpkg.com/three-globe/example/img/earth-night.jpg'
-const BUMP = '//unpkg.com/three-globe/example/img/earth-topology.png'
-const STARS = '//unpkg.com/three-globe/example/img/night-sky.png'
+const NIGHT = '/globe/earth-night.jpg'
+const BUMP = '/globe/earth-topology.png'
+const STARS = '/globe/night-sky.png'
 
 interface Marker {
   id: string
@@ -19,16 +21,12 @@ interface Marker {
   size: number
   kind: GeoPoint['kind']
   selected: boolean
+  heading?: number
 }
 
-function colorFor(kind: GeoPoint['kind']): string {
-  if (kind === 'quake') return '#ff8a3d'
-  if (kind === 'aircraft') return '#8b9cff'
-  if (kind === 'alert') return '#ff5d6c'
-  if (kind === 'vessel') return '#4cc9f0'
-  if (kind === 'fire') return '#ff7a3d'
-  return '#3ee0c8'
-}
+type HtmlItem =
+  | { html: 'beacon'; id: string; lat: number; lng: number; name: string; kind: string }
+  | { html: 'track'; id: string; lat: number; lng: number; name: string; heading: number; color: string }
 
 function webglAvailable(): boolean {
   try {
@@ -54,6 +52,7 @@ export function OverwatchGlobe() {
     stage,
     heatEnabled,
     heatCells,
+    trails,
   } = useOverwatch()
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -101,12 +100,13 @@ export function OverwatchGlobe() {
       layer.enabled && (layer.status === 'live' || layer.status === 'stale')
         ? layer.points.map((p) => {
             const selected = p.id === selectedId
+            const heading = typeof p.heading === 'number' && Number.isFinite(p.heading) ? p.heading : undefined
             return {
               id: p.id,
               lat: p.lat,
               lng: p.lng,
               name: p.label,
-              color: colorFor(p.kind),
+              color: colorForKind(p.kind),
               size:
                 (p.kind === 'quake'
                   ? Math.min(1.2, 0.28 + (p.mag ?? 2) * 0.12)
@@ -114,36 +114,91 @@ export function OverwatchGlobe() {
                     ? 0.22
                     : p.kind === 'alert'
                       ? 0.38
-                      : 0.28) * (selected ? 1.7 : 1),
+                      : p.kind === 'sat'
+                        ? 0.2
+                        : 0.28) * (selected ? 1.7 : 1),
               kind: p.kind,
               selected,
+              heading,
             }
           })
         : [],
     )
   }, [layers, selectedId])
 
-  const makeBeacon = useCallback(
+  const headingMarkers = useMemo(
+    () => liveMarkers.filter((m) => m.heading != null && (m.kind === 'aircraft' || m.kind === 'vessel' || m.kind === 'sat')),
+    [liveMarkers],
+  )
+  const blobMarkers = useMemo(() => {
+    const headed = new Set(headingMarkers.map((m) => m.id))
+    return liveMarkers.filter((m) => !headed.has(m.id))
+  }, [liveMarkers, headingMarkers])
+
+  const htmlItems = useMemo<HtmlItem[]>(() => {
+    const beacons: HtmlItem[] = HOTSPOTS.map((hs) => ({
+      html: 'beacon',
+      id: hs.id,
+      lat: hs.lat,
+      lng: hs.lng,
+      name: hs.name,
+      kind: hs.kind,
+    }))
+    const tracks: HtmlItem[] = headingMarkers.map((m) => ({
+      html: 'track',
+      id: m.id,
+      lat: m.lat,
+      lng: m.lng,
+      name: m.name,
+      heading: m.heading ?? 0,
+      color: m.color,
+    }))
+    return [...beacons, ...tracks]
+  }, [headingMarkers])
+
+  const makeHtml = useCallback(
     (obj: object) => {
-      const hs = obj as (typeof HOTSPOTS)[number]
+      const item = obj as HtmlItem
+      if (item.html === 'track') {
+        const el = document.createElement('button')
+        el.type = 'button'
+        el.className = 'heading-marker globe-heading'
+        el.style.setProperty('--hm-color', item.color)
+        el.style.transform = `rotate(${item.heading}deg)`
+        el.title = item.name
+        el.setAttribute('aria-label', item.name)
+        el.style.pointerEvents = 'auto'
+        el.addEventListener('click', (ev) => {
+          ev.stopPropagation()
+          for (const layer of layers) {
+            const pt = layer.points.find((p) => p.id === item.id)
+            if (pt) {
+              selectPoint(pt)
+              return
+            }
+          }
+        })
+        return el
+      }
+      const hs = HOTSPOTS.find((h) => h.id === item.id)
       const el = document.createElement('button')
       el.type = 'button'
-      el.className = `beacon ${hs.kind}${hs.id === selectedHotspotId ? ' selected' : ''}`
-      el.title = hs.name
-      el.setAttribute('aria-label', hs.name)
+      el.className = `beacon ${item.kind}${item.id === selectedHotspotId ? ' selected' : ''}`
+      el.title = item.name
+      el.setAttribute('aria-label', item.name)
       el.style.pointerEvents = 'auto'
       el.addEventListener('click', (ev) => {
         ev.stopPropagation()
-        selectHotspot(hs)
+        if (hs) selectHotspot(hs)
       })
       return el
     },
-    [selectHotspot, selectedHotspotId],
+    [layers, selectHotspot, selectPoint, selectedHotspotId],
   )
 
   const rings = useMemo(() => {
     const fromLive = liveMarkers
-      .filter((m) => m.kind === 'quake' || m.kind === 'fire' || m.kind === 'alert' || m.kind === 'event')
+      .filter((m) => m.kind === 'quake' || m.kind === 'fire' || m.kind === 'alert' || m.kind === 'event' || m.kind === 'hazard')
       .map((m) => ({
         lat: m.lat,
         lng: m.lng,
@@ -192,18 +247,18 @@ export function OverwatchGlobe() {
         atmosphereColor="#3ee0c8"
         atmosphereAltitude={0.18}
         backgroundColor="#02040a"
-        pointsData={liveMarkers}
+        pointsData={blobMarkers}
         pointLat="lat"
         pointLng="lng"
         pointAltitude={(d: object) => ((d as Marker).selected ? 0.035 : 0.01)}
         pointRadius="size"
         pointColor="color"
         pointLabel={(d: object) => (d as Marker).name}
-        htmlElementsData={HOTSPOTS}
+        htmlElementsData={htmlItems}
         htmlLat="lat"
         htmlLng="lng"
-        htmlAltitude={0.02}
-        htmlElement={makeBeacon}
+        htmlAltitude={(d: object) => ((d as HtmlItem).html === 'track' ? 0.012 : 0.02)}
+        htmlElement={makeHtml}
         onGlobeReady={() => {
           const controls = globeRef.current?.controls()
           if (controls) {
@@ -242,6 +297,24 @@ export function OverwatchGlobe() {
           const cell = heatCells.find((c) => c.id === poly.id)
           if (cell) selectHeat(cell)
         }}
+        pathsData={trails}
+        pathPoints={(d: object) => (d as TrackTrail).coords.map(([lat, lng]) => [lat, lng, 0.01])}
+        pathColor={(d: object) => (d as TrackTrail).color}
+        pathStroke={0.55}
+        pathDashLength={0.01}
+        pathDashGap={0.006}
+        pathDashAnimateTime={0}
+        onPathClick={(d: object) => {
+          const trail = d as TrackTrail
+          const id = trail.id.split('·')[0]
+          for (const layer of layers) {
+            const pt = layer.points.find((p) => p.id === id)
+            if (pt) {
+              selectPoint(pt)
+              return
+            }
+          }
+        }}
         ringsData={rings}
         ringLat="lat"
         ringLng="lng"
@@ -261,7 +334,7 @@ export function OverwatchGlobe() {
               : heatEnabled && heatPolys.length
                 ? `${heatPolys.length} attention cells · click a hex`
                 : liveCount
-                  ? `${liveCount} live highlights · drag to orbit · click a point`
+                  ? `${liveCount} live highlights${trails.length ? ` · ${trails.length} sampled trails` : ''} · drag to orbit · click a point`
                   : 'drag to orbit · scroll to zoom · click a beacon'}
       </div>
     </div>

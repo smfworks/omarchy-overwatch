@@ -6,13 +6,23 @@ export interface FeedGeometry {
   coordinates: unknown
 }
 
+export type GeoKind =
+  | 'quake'
+  | 'event'
+  | 'aircraft'
+  | 'alert'
+  | 'vessel'
+  | 'fire'
+  | 'sat'
+  | 'hazard'
+
 export interface GeoPoint {
   id: string
   lat: number
   lng: number
   label: string
   mag?: number
-  kind: 'quake' | 'event' | 'aircraft' | 'alert' | 'vessel' | 'fire'
+  kind: GeoKind
   extra?: string
   /** Layer id that produced this point (`earthquakes`, `nws`, …). */
   layerId?: string
@@ -27,6 +37,17 @@ export interface GeoPoint {
   sourceUrl?: string
   observedAt?: string
   areaDesc?: string
+  /** True heading / track, degrees clockwise from north, when the feed sent it. */
+  heading?: number
+  /** Course over ground (deg) when distinct from heading. */
+  course?: number
+  /** Speed in m/s when the feed sent SI units (OpenSky velocity). */
+  speedMs?: number
+  /** Speed in knots when the feed sent nautical units (AIS SOG, NHC movement). */
+  speedKt?: number
+  /** Barometric / geometric altitude in meters when present. */
+  altitudeM?: number
+  onGround?: boolean
 }
 
 export interface LayerState {
@@ -38,4 +59,16 @@ export interface LayerState {
   error: string | null
   points: GeoPoint[]
   note: string
+}
+
+export interface LayerDef {
+  id: string
+  label: string
+  note: string
+  /** Poll interval while the toggle is on. */
+  pollMs: number
+  defaultOn?: boolean
+  /** Matching catalog tool id when one exists. */
+  catalogId?: string
+  fetch: () => Promise<GeoPoint[]>
 }

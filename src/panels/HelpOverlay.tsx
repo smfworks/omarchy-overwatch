@@ -31,14 +31,19 @@ export function HelpOverlay() {
             <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle left / right / top / bottom docks
           </li>
           <li>
+            <kbd>[</kbd> <kbd>]</kbd> cycle locality/storm basemap DEFAULT / SATELLITE / NIGHT
+          </li>
+          <li>
             <kbd>?</kbd> this panel
           </li>
         </ul>
         <p className="disclaimer">
           Select a catalog card or ticker headline for an in-depth center view. Select a hotspot or live point to
-          zoom, then open a locality map (OpenStreetMap tiles). Dangerous weather (NWS / EONET) opens a storm map
-          with optional RainViewer radar. Status is LIVE / STALE / ERR / OFF — never invented intel. Passive vs
-          active OPSEC is labeled per tool.
+          zoom, then open a locality map. Basemap pack: DEFAULT (OSM raster), SATELLITE (Esri World Imagery, attributed),
+          NIGHT (OpenFreeMap dark vector; OSM raster fallback). NVG is an aesthetic tint only. Dangerous weather
+          (NWS / EONET / NHC) opens a storm map with optional RainViewer radar. ADS-B/AIS trails are a client ring
+          buffer of sampled polls — not full-sky coverage. Status is LIVE / STALE / ERR / OFF — never invented intel.
+          Passive vs active OPSEC is labeled per tool.
         </p>
         <div className="count-line">HEAT (attention)</div>
         <p className="case-hint">{HEAT_FORMULA_HELP}</p>
