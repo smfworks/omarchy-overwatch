@@ -1,6 +1,7 @@
 import { TOOLS } from '../catalog/tools'
 import { CATEGORIES } from '../catalog/types'
 import { HOTSPOTS } from '../data/hotspots'
+import { isDangerousWeather } from '../maps/weather'
 import { useOverwatch } from '../state/context'
 
 function openUrl(url: string) {
@@ -8,7 +9,12 @@ function openUrl(url: string) {
 }
 
 export function DetailPanel() {
-  const { selection, selectTool, selectHotspot, pinSelection } = useOverwatch()
+  const { selection, selectTool, selectHotspot, selectPoint, pinSelection, openStage, goBack, stage, layers } =
+    useOverwatch()
+
+  const livePoints = layers.flatMap((layer) =>
+    layer.enabled && (layer.status === 'live' || layer.status === 'stale') ? layer.points.slice(0, 8) : [],
+  )
 
   if (!selection) {
     return (
@@ -16,18 +22,65 @@ export function DetailPanel() {
         <div className="panel-head">Dossier</div>
         <div className="panel-body">
           <div className="empty">
-            Select a catalog card or a globe beacon. Overwatch is a public-source launcher — it does not collect
-            targets or invent intelligence.
+            Select a catalog card, ticker headline, demo beacon, or live highlight. Overwatch OSINT for Omarchy is a
+            public-source launcher — it does not collect targets or invent intelligence.
           </div>
+          {livePoints.length > 0 && (
+            <>
+              <div className="count-line">Live highlights</div>
+              {livePoints.map((pt) => (
+                <button key={pt.id} className="tool-card selectable" onClick={() => selectPoint(pt)}>
+                  <h3>{pt.label}</h3>
+                  <p>
+                    {pt.lat.toFixed(2)}°, {pt.lng.toFixed(2)}° · {pt.kind}
+                    {pt.layerId ? ` · ${pt.layerId}` : ''}
+                  </p>
+                </button>
+              ))}
+            </>
+          )}
           <div className="count-line">Demo beacons</div>
           {HOTSPOTS.map((hs) => (
-            <button key={hs.id} className="tool-card" onClick={() => selectHotspot(hs)}>
+            <button key={hs.id} className="tool-card selectable" onClick={() => selectHotspot(hs)}>
               <h3>{hs.name}</h3>
               <p>
                 {hs.lat.toFixed(2)}°, {hs.lng.toFixed(2)}° · {hs.kind}
               </p>
             </button>
           ))}
+        </div>
+      </>
+    )
+  }
+
+  if (selection.kind === 'ticker') {
+    const item = selection.item
+    return (
+      <>
+        <div className="panel-head">Headline</div>
+        <div className="panel-body detail">
+          <h2>{item.title}</h2>
+          <dl className="kv">
+            <dt>Source</dt>
+            <dd>{item.source}</dd>
+            <dt>Published</dt>
+            <dd>{item.published ?? 'not provided'}</dd>
+          </dl>
+          <div className="actions">
+            <button className="btn" disabled={!item.url} onClick={() => item.url && openUrl(item.url)}>
+              Open headline
+            </button>
+            {stage !== 'depth' ? (
+              <button className="btn ghost" onClick={() => openStage('depth')}>
+                Inspect on stage
+              </button>
+            ) : (
+              <button className="btn ghost" onClick={goBack}>
+                Back to globe
+              </button>
+            )}
+          </div>
+          <div className="disclaimer">Exactly the title/link/date the feed sent. No article body is fetched.</div>
         </div>
       </>
     )
@@ -69,10 +122,19 @@ export function DetailPanel() {
             <button className="btn ghost" onClick={pinSelection}>
               Pin to case
             </button>
+            {stage !== 'depth' ? (
+              <button className="btn ghost" onClick={() => openStage('depth')}>
+                Inspect on stage
+              </button>
+            ) : (
+              <button className="btn ghost" onClick={goBack}>
+                Back to globe
+              </button>
+            )}
           </div>
           <div className="disclaimer">
-            Confirm the destination yourself. Catalog metadata can lag; Overwatch does not vouch for third-party
-            uptime, ToS, or legality in your jurisdiction.
+            Confirm the destination yourself. Catalog metadata can lag; Overwatch OSINT for Omarchy does not vouch for
+            third-party uptime, ToS, or legality in your jurisdiction.
           </div>
         </div>
       </>
@@ -100,7 +162,7 @@ export function DetailPanel() {
           </div>
           <div className="count-line">Related catalog</div>
           {related.map((tool) => (
-            <button key={tool.id} className="tool-card" onClick={() => selectTool(tool)}>
+            <button key={tool.id} className="tool-card selectable" onClick={() => selectTool(tool)}>
               <h3>{tool.name}</h3>
               <p>{tool.description}</p>
             </button>
@@ -119,6 +181,20 @@ export function DetailPanel() {
             >
               OpenStreetMap
             </button>
+            {stage !== 'map' ? (
+              <button className="btn" onClick={() => openStage('map')}>
+                Locality map
+              </button>
+            ) : (
+              <button className="btn ghost" onClick={goBack}>
+                Back to globe
+              </button>
+            )}
+            {stage !== 'depth' && (
+              <button className="btn ghost" onClick={() => openStage('depth')}>
+                Inspect on stage
+              </button>
+            )}
             <button className="btn ghost" onClick={pinSelection}>
               Pin to case
             </button>
@@ -132,6 +208,7 @@ export function DetailPanel() {
   }
 
   const pt = selection.point
+  const storm = isDangerousWeather(pt)
   return (
     <>
       <div className="panel-head">Live layer point</div>
@@ -139,17 +216,40 @@ export function DetailPanel() {
         <h2>{pt.label}</h2>
         <div className="coords">
           {pt.lat.toFixed(3)}°, {pt.lng.toFixed(3)}° · {pt.kind}
+          {pt.layerId ? ` · ${pt.layerId}` : ''}
         </div>
+        {pt.headline && <p>{pt.headline}</p>}
         {pt.extra && <p>{pt.extra}</p>}
+        {pt.detail && <p>{pt.detail.slice(0, 400)}{pt.detail.length > 400 ? '…' : ''}</p>}
         <p>Fetched from a public feed. If a layer is STALE or ERR, treat this as unverified leftover data.</p>
         <div className="actions">
+          {storm && stage !== 'storm' && (
+            <button className="btn" onClick={() => openStage('storm')}>
+              Storm map
+            </button>
+          )}
+          {stage !== 'map' && (
+            <button className={storm ? 'btn ghost' : 'btn'} onClick={() => openStage('map')}>
+              Locality map
+            </button>
+          )}
+          {stage !== 'globe' && (
+            <button className="btn ghost" onClick={goBack}>
+              Back to globe
+            </button>
+          )}
+          {stage !== 'depth' && (
+            <button className="btn ghost" onClick={() => openStage('depth')}>
+              Inspect on stage
+            </button>
+          )}
           <button
-            className="btn"
+            className="btn ghost"
             onClick={() =>
               openUrl(`https://www.openstreetmap.org/?mlat=${pt.lat}&mlon=${pt.lng}#map=7/${pt.lat}/${pt.lng}`)
             }
           >
-            Open map
+            OpenStreetMap
           </button>
           <button
             className="btn ghost"

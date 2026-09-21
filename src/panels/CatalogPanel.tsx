@@ -62,22 +62,28 @@ export function CatalogPanel() {
         <div className="count-line">
           {visibleTools.length} sources
           {filters.categories.length ? ` · ${filters.categories.length} domains` : ''}
+          {' · select a card for depth'}
         </div>
-        {visibleTools.map((tool) => (
-          <button
-            key={tool.id}
-            className={`tool-card${selection?.kind === 'tool' && selection.tool.id === tool.id ? ' active' : ''}`}
-            onClick={() => selectTool(tool)}
-          >
-            <h3>{tool.name}</h3>
-            <p>{tool.description}</p>
-            <div className="meta-row">
-              <span className={`badge ${tool.opsec === 'passive' ? 'passive' : 'active-opsec'}`}>{tool.opsec}</span>
-              <span className={`badge${tool.pricing === 'paid' ? ' paid' : ''}`}>{tool.pricing}</span>
-              <span className="badge">{tool.category}</span>
-            </div>
-          </button>
-        ))}
+        {visibleTools.map((tool) => {
+          const active = selection?.kind === 'tool' && selection.tool.id === tool.id
+          return (
+            <button
+              key={tool.id}
+              className={`tool-card selectable${active ? ' active' : ''}`}
+              onClick={() => selectTool(tool)}
+              aria-pressed={active}
+              aria-current={active ? 'true' : undefined}
+            >
+              <h3>{tool.name}</h3>
+              <p>{tool.description}</p>
+              <div className="meta-row">
+                <span className={`badge ${tool.opsec === 'passive' ? 'passive' : 'active-opsec'}`}>{tool.opsec}</span>
+                <span className={`badge${tool.pricing === 'paid' ? ' paid' : ''}`}>{tool.pricing}</span>
+                <span className="badge">{tool.category}</span>
+              </div>
+            </button>
+          )
+        })}
         {!visibleTools.length && <div className="empty">No catalog matches. Clear filters or press Esc.</div>}
       </div>
     </>

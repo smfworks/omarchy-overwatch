@@ -17,13 +17,36 @@ interface Marker {
   color: string
   size: number
   kind: GeoPoint['kind']
+  selected: boolean
+}
+
+function colorFor(kind: GeoPoint['kind']): string {
+  if (kind === 'quake') return '#ff8a3d'
+  if (kind === 'aircraft') return '#8b9cff'
+  if (kind === 'alert') return '#ff5d6c'
+  if (kind === 'vessel') return '#4cc9f0'
+  if (kind === 'fire') return '#ff7a3d'
+  return '#3ee0c8'
+}
+
+function webglAvailable(): boolean {
+  try {
+    const c = document.createElement('canvas')
+    const gl = c.getContext('webgl2') || c.getContext('webgl')
+    if (!gl) return false
+    gl.getExtension('WEBGL_lose_context')?.loseContext()
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function OverwatchGlobe() {
-  const { layers, selectHotspot, selectPoint, flyTo, selection } = useOverwatch()
+  const { layers, selectHotspot, selectPoint, flyTo, selection, reportGlobePov, stage } = useOverwatch()
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [dims, setDims] = useState({ width: 800, height: 600 })
+  const [webgl] = useState(webglAvailable)
 
   useEffect(() => {
     const el = wrapRef.current
@@ -35,48 +58,64 @@ export function OverwatchGlobe() {
     return () => ro.disconnect()
   }, [])
 
+  const flyToRef = useRef(flyTo)
+  flyToRef.current = flyTo
+
   useEffect(() => {
     if (flyTo) globeRef.current?.pointOfView(flyTo, 900)
   }, [flyTo])
 
+  useEffect(() => {
+    const controls = globeRef.current?.controls()
+    if (controls) controls.autoRotate = stage === 'globe' && !selection
+  }, [stage, selection])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const pov = globeRef.current?.pointOfView()
+      if (pov && Number.isFinite(pov.lat) && Number.isFinite(pov.lng) && Number.isFinite(pov.altitude)) {
+        reportGlobePov({ lat: pov.lat, lng: pov.lng, altitude: pov.altitude })
+      }
+    }, 800)
+    return () => window.clearInterval(id)
+  }, [reportGlobePov])
+
+  const selectedId = selection?.kind === 'point' ? selection.point.id : null
+  const selectedHotspotId = selection?.kind === 'hotspot' ? selection.hotspot.id : null
+
   const liveMarkers = useMemo<Marker[]>(() => {
     return layers.flatMap((layer) =>
       layer.enabled && (layer.status === 'live' || layer.status === 'stale')
-        ? layer.points.map((p) => ({
-            id: p.id,
-            lat: p.lat,
-            lng: p.lng,
-            name: p.label,
-            color:
-              p.kind === 'quake'
-                ? '#ff8a3d'
-                : p.kind === 'aircraft'
-                  ? '#8b9cff'
-                  : p.kind === 'alert'
-                    ? '#ff5d6c'
-                    : p.kind === 'vessel'
-                      ? '#4cc9f0'
-                      : p.kind === 'fire'
-                        ? '#ff7a3d'
-                        : '#3ee0c8',
-            size:
-              p.kind === 'quake'
-                ? Math.min(1.2, 0.28 + (p.mag ?? 2) * 0.12)
-                : p.kind === 'fire'
-                  ? 0.22
-                  : 0.28,
-            kind: p.kind,
-          }))
+        ? layer.points.map((p) => {
+            const selected = p.id === selectedId
+            return {
+              id: p.id,
+              lat: p.lat,
+              lng: p.lng,
+              name: p.label,
+              color: colorFor(p.kind),
+              size:
+                (p.kind === 'quake'
+                  ? Math.min(1.2, 0.28 + (p.mag ?? 2) * 0.12)
+                  : p.kind === 'fire'
+                    ? 0.22
+                    : p.kind === 'alert'
+                      ? 0.38
+                      : 0.28) * (selected ? 1.7 : 1),
+              kind: p.kind,
+              selected,
+            }
+          })
         : [],
     )
-  }, [layers])
+  }, [layers, selectedId])
 
   const makeBeacon = useCallback(
     (obj: object) => {
       const hs = obj as (typeof HOTSPOTS)[number]
       const el = document.createElement('button')
       el.type = 'button'
-      el.className = `beacon ${hs.kind}`
+      el.className = `beacon ${hs.kind}${hs.id === selectedHotspotId ? ' selected' : ''}`
       el.title = hs.name
       el.setAttribute('aria-label', hs.name)
       el.style.pointerEvents = 'auto'
@@ -86,28 +125,46 @@ export function OverwatchGlobe() {
       })
       return el
     },
-    [selectHotspot],
+    [selectHotspot, selectedHotspotId],
   )
 
-  const rings = useMemo(
-    () =>
-      liveMarkers
-        .filter((m) => m.kind === 'quake' || m.kind === 'fire')
-        .map((m) => ({
-          lat: m.lat,
-          lng: m.lng,
-          maxR: m.kind === 'fire' ? 2.2 : 3.5,
-          color: m.color,
-        })),
-    [liveMarkers],
-  )
+  const rings = useMemo(() => {
+    const fromLive = liveMarkers
+      .filter((m) => m.kind === 'quake' || m.kind === 'fire' || m.kind === 'alert' || m.kind === 'event')
+      .map((m) => ({
+        lat: m.lat,
+        lng: m.lng,
+        maxR: m.selected ? 5.2 : m.kind === 'fire' ? 2.2 : m.kind === 'alert' ? 4.2 : 3.5,
+        color: m.color,
+      }))
+    if (selection?.kind === 'hotspot') {
+      fromLive.push({
+        lat: selection.hotspot.lat,
+        lng: selection.hotspot.lng,
+        maxR: 5,
+        color: '#3ee0c8',
+      })
+    }
+    return fromLive
+  }, [liveMarkers, selection])
+
+  const liveCount = liveMarkers.length
+
+  if (!webgl) {
+    return (
+      <div className="globe-inner globe-fallback" ref={wrapRef}>
+        <p>Globe WebGL is unavailable in this session. Catalog, ticker, and dossier still work. No geodata was invented.</p>
+        <p className="disclaimer">
+          {liveCount
+            ? `${liveCount} live layer points are loaded — open them from the right dossier for locality / storm maps.`
+            : 'Enable a live layer in the status strip to list points in the dossier.'}
+        </p>
+      </div>
+    )
+  }
 
   return (
-    <div className="stage" ref={wrapRef}>
-      <span className="corner tl" />
-      <span className="corner tr" />
-      <span className="corner bl" />
-      <span className="corner br" />
+    <div className="globe-inner" ref={wrapRef}>
       <Globe
         ref={globeRef}
         width={dims.width}
@@ -121,7 +178,7 @@ export function OverwatchGlobe() {
         pointsData={liveMarkers}
         pointLat="lat"
         pointLng="lng"
-        pointAltitude={0.01}
+        pointAltitude={(d: object) => ((d as Marker).selected ? 0.035 : 0.01)}
         pointRadius="size"
         pointColor="color"
         pointLabel={(d: object) => (d as Marker).name}
@@ -137,7 +194,8 @@ export function OverwatchGlobe() {
             controls.autoRotateSpeed = 0.28
             controls.enableDamping = true
           }
-          globeRef.current?.pointOfView({ lat: 18, lng: 25, altitude: 2.4 }, 0)
+          const resume = flyToRef.current
+          globeRef.current?.pointOfView(resume ?? { lat: 18, lng: 25, altitude: 2.4 }, 0)
         }}
         onGlobeClick={({ lat, lng }: { lat: number; lng: number }) => {
           const hs = nearestHotspot(lat, lng)
@@ -162,11 +220,14 @@ export function OverwatchGlobe() {
         ringRepeatPeriod={1400}
         animateIn={false}
       />
-      <div className="scanlines" />
       <div className="globe-hint">
         {selection?.kind === 'hotspot'
           ? `lock: ${selection.hotspot.name}`
-          : 'drag to orbit · scroll to zoom · click a beacon'}
+          : selection?.kind === 'point'
+            ? `lock: ${selection.point.label}`
+            : liveCount
+              ? `${liveCount} live highlights · drag to orbit · click a point`
+              : 'drag to orbit · scroll to zoom · click a beacon'}
       </div>
     </div>
   )

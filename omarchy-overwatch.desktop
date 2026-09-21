@@ -1,8 +1,8 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Omarchy Overwatch
-Comment=Public-source OSINT workbench for Omarchy Linux
+Name=Overwatch OSINT for Omarchy
+Comment=Public-source OSINT HUD for Omarchy Linux (CLI: omarchy-overwatch)
 Exec=omarchy-overwatch
 Icon=omarchy-overwatch
 Terminal=false

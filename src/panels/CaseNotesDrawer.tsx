@@ -134,6 +134,7 @@ export function CaseNotesDrawer() {
     if (!selection) return 'Open a catalog card, hotspot, or live point, then pin it. Pins store ids/labels/coords only.'
     if (selection.kind === 'tool') return `Pin ${selection.tool.name}`
     if (selection.kind === 'hotspot') return `Pin ${selection.hotspot.name}`
+    if (selection.kind === 'ticker') return 'Headlines cannot be pinned — open a catalog card or live point.'
     return `Pin ${selection.point.label}`
   }, [selection])
 
@@ -166,7 +167,7 @@ export function CaseNotesDrawer() {
         </div>
         <div className="panel-body case-drawer-body">
           <p className="case-lede">
-            Local scratchpad in <code>localStorage</code>. Overwatch does not draft intelligence, auto-fill
+            Local scratchpad in <code>localStorage</code>. Overwatch OSINT for Omarchy does not draft intelligence, auto-fill
             conclusions, or sync cases anywhere.
           </p>
           <div className="case-toolbar">
@@ -274,7 +275,7 @@ export function CaseNotesDrawer() {
                 <textarea
                   className="case-notes"
                   spellCheck
-                  placeholder="Your notes only — markdown or plaintext. Overwatch will not write this for you."
+                  placeholder="Your notes only — markdown or plaintext. Overwatch OSINT for Omarchy will not write this for you."
                   value={current.notes}
                   onChange={(e) => patchActive((rec) => ({ ...rec, notes: e.target.value, updatedAt: Date.now() }))}
                 />

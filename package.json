@@ -3,7 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Configurable OSINT intelligence dashboard for Omarchy Linux",
+  "description": "Overwatch OSINT for Omarchy — public-source OSINT catalog and visualization HUD",
+  "productName": "Overwatch OSINT for Omarchy",
   "author": "SMF Works",
   "license": "MIT",
   "scripts": {
@@ -14,6 +15,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "maplibre-gl": "^6.10.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-globe.gl": "^2.35.0",

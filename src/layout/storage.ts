@@ -19,7 +19,7 @@ export const DEFAULT_LAYOUT: LayoutState = {
   leftWidth: 360,
   rightWidth: 380,
   topHeight: 64,
-  bottomHeight: 44,
+  bottomHeight: 52,
 }
 
 const KEY = 'omarchy-overwatch.layout.v1'

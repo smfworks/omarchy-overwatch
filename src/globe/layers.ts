@@ -82,8 +82,12 @@ export async function fetchEarthquakes(): Promise<GeoPoint[]> {
       mag,
       label: `M${mag?.toFixed(1) ?? '?'} ${f.properties?.place ?? 'earthquake'}`,
       kind: 'quake',
+      layerId: 'earthquakes',
     }
-    if (f.properties?.time) point.extra = new Date(f.properties.time).toISOString()
+    if (f.properties?.time) {
+      point.observedAt = new Date(f.properties.time).toISOString()
+      point.extra = point.observedAt
+    }
     points.push(point)
     if (points.length >= 80) break
   }
@@ -98,6 +102,9 @@ interface EonetGeometry {
 interface EonetEvent {
   id?: string
   title?: string
+  description?: string
+  link?: string
+  categories?: { id?: string; title?: string }[]
   geometry?: EonetGeometry[]
 }
 
@@ -121,15 +128,28 @@ export async function fetchEonet(): Promise<GeoPoint[]> {
   for (const [i, ev] of (data.events ?? []).entries()) {
     const pair = lastCoords(ev.geometry)
     if (!pair) continue
+    const cats = (ev.categories ?? [])
+      .map((c) => c.title || c.id)
+      .filter((c): c is string => Boolean(c))
     const point: GeoPoint = {
       id: `eonet-${ev.id ?? i}`,
       lat: pair[0],
       lng: pair[1],
       label: ev.title ?? 'EONET event',
       kind: 'event',
+      layerId: 'eonet',
     }
+    if (cats.length) {
+      point.categories = cats
+      point.eventType = cats[0]
+    }
+    if (typeof ev.description === 'string' && ev.description.trim()) point.detail = ev.description.trim()
+    if (typeof ev.link === 'string' && ev.link.startsWith('http')) point.sourceUrl = ev.link
     const date = ev.geometry?.[ev.geometry.length - 1]?.date
-    if (date) point.extra = date
+    if (date) {
+      point.observedAt = date
+      point.extra = date
+    }
     points.push(point)
   }
   return points
@@ -137,7 +157,7 @@ export async function fetchEonet(): Promise<GeoPoint[]> {
 
 export async function fetchOpenSky(): Promise<GeoPoint[]> {
   const data = await fetchJson('/proxy/opensky/api/states/all', 15000, 'opensky')
-  return parseOpenSkyStates(data)
+  return parseOpenSkyStates(data).map((p) => ({ ...p, layerId: 'opensky' }))
 }
 
 interface NwsAlert {
@@ -145,9 +165,15 @@ interface NwsAlert {
   properties?: {
     event?: string
     headline?: string
+    description?: string
     areaDesc?: string
+    severity?: string
+    urgency?: string
+    sent?: string
+    effective?: string
+    expires?: string
   }
-  geometry?: { coordinates?: unknown }
+  geometry?: { type?: string; coordinates?: unknown }
 }
 
 function centroid(geom: unknown): [number, number] | null {
@@ -173,14 +199,30 @@ export async function fetchNwsAlerts(): Promise<GeoPoint[]> {
   for (const [i, f] of (data.features ?? []).entries()) {
     const pair = centroid(f.geometry)
     if (!pair) continue
+    const props = f.properties
     const point: GeoPoint = {
       id: `nws-${f.id ?? i}`,
       lat: pair[0],
       lng: pair[1],
-      label: f.properties?.event ?? 'NWS alert',
+      label: props?.event ?? 'NWS alert',
       kind: 'alert',
+      layerId: 'nws',
     }
-    if (f.properties?.areaDesc) point.extra = f.properties.areaDesc
+    if (props?.event) point.eventType = props.event
+    if (props?.headline) point.headline = props.headline
+    if (props?.description) point.detail = props.description.slice(0, 1200)
+    if (props?.severity) point.severity = props.severity
+    if (props?.urgency) point.urgency = props.urgency
+    if (props?.areaDesc) {
+      point.areaDesc = props.areaDesc
+      point.extra = props.areaDesc
+    }
+    const when = props?.effective || props?.sent
+    if (when) point.observedAt = when
+    const geom = f.geometry
+    if (geom?.type && geom.coordinates != null) {
+      point.geometry = { type: geom.type, coordinates: geom.coordinates }
+    }
     points.push(point)
     if (points.length >= 60) break
   }
@@ -189,7 +231,7 @@ export async function fetchNwsAlerts(): Promise<GeoPoint[]> {
 
 export async function fetchAis(): Promise<GeoPoint[]> {
   const data = await fetchJson('/proxy/ais/snapshot', 20000, 'ais')
-  return parseAisSnapshot(data)
+  return parseAisSnapshot(data).map((p) => ({ ...p, layerId: 'ais' }))
 }
 
 const FIRMS_PUBLIC_CSV =
@@ -199,13 +241,13 @@ export async function fetchFirms(): Promise<GeoPoint[]> {
   const errors: string[] = []
   try {
     const csv = await fetchText(FIRMS_PUBLIC_CSV, 25000, 'firms')
-    return parseFirmsCsv(csv)
+    return parseFirmsCsv(csv).map((p) => ({ ...p, layerId: 'firms' }))
   } catch (err) {
     errors.push(err instanceof Error ? err.message : 'public FIRMS CSV failed')
   }
   try {
     const csv = await fetchText('/proxy/firms/api/active', 25000, 'firms')
-    return parseFirmsCsv(csv)
+    return parseFirmsCsv(csv).map((p) => ({ ...p, layerId: 'firms' }))
   } catch (err) {
     errors.push(err instanceof Error ? err.message : 'FIRMS MAP_KEY API failed')
   }

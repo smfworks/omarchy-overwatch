@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PRODUCT_HUD_SUB, PRODUCT_HUD_TITLE } from '../branding'
 import { useOverwatch } from '../state/context'
 import { resetLayout } from '../layout/storage'
 
@@ -18,6 +19,7 @@ export function StatusStrip() {
     setCasesDrawerOpen,
     casesDrawerOpen,
     caseStore,
+    refreshLayers,
   } = useOverwatch()
   const [clock, setClock] = useState(utcClock)
 
@@ -29,8 +31,8 @@ export function StatusStrip() {
   return (
     <div className="status-strip">
       <div className="brand">
-        <div className="brand-title">OMARCHY OVERWATCH</div>
-        <div className="brand-sub">Public-source OSINT workbench</div>
+        <div className="brand-title">{PRODUCT_HUD_TITLE}</div>
+        <div className="brand-sub">{PRODUCT_HUD_SUB}</div>
       </div>
       <div className="clock">{clock}</div>
       <div className="chip-row">
@@ -58,6 +60,9 @@ export function StatusStrip() {
             {layer.enabled && layer.status !== 'live' && layer.status !== 'off' ? ` ${layer.status.toUpperCase()}` : ''}
           </button>
         ))}
+        <button className="icon-btn" title="Refresh live layers" aria-label="Refresh live layers" onClick={refreshLayers}>
+          ↻
+        </button>
       </div>
       <button
         className={`icon-btn cases-btn${casesDrawerOpen ? ' on' : ''}`}
