@@ -38,7 +38,6 @@ export function StatusStrip() {
     cycleHudDensity,
     hudDensity,
     favorites,
-    selectTool,
     overlay,
     setOverlay,
   } = useOverwatch()
@@ -84,11 +83,11 @@ export function StatusStrip() {
         {!filters.categories.length && filters.opsec === 'any' && (
           <span className="chip ghost">no domain filter</span>
         )}
-        {pinnedTools.map((tool) => (
-          <button key={tool.id} type="button" className="chip" onClick={() => selectTool(tool)} title={tool.name}>
-            ★ {tool.name}
-          </button>
-        ))}
+        {pinnedTools.length > 0 && (
+          <span className="chip" title={pinnedTools.map((t) => t.name).join(', ')}>
+            ★ {pinnedTools.length}
+          </span>
+        )}
       </div>
       <div className="layer-toggles">
         {layers.map((layer) => (
