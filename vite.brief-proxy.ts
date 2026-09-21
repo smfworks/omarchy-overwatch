@@ -2,6 +2,7 @@ import type { Plugin } from 'vite'
 import {
   allowedBriefUpstream,
   chatCompletionsUrl,
+  friendlyBriefError,
   ollamaChatUrl,
   ollamaTagsUrl,
 } from './src/brief/allow'
@@ -107,7 +108,7 @@ async function probeOllama(res: SimpleRes): Promise<void> {
     sendJson(res, 200, { ok: true, models })
   } catch (err) {
     sendJson(res, 502, {
-      error: err instanceof Error ? err.message : 'Ollama unreachable at 127.0.0.1:11434',
+      error: friendlyBriefError(err instanceof Error ? err.message : 'Ollama unreachable', 'ollama'),
     })
   }
 }
@@ -195,7 +196,7 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
     res.end(text)
   } catch (err) {
     sendJson(res, 502, {
-      error: err instanceof Error ? err.message : 'Brief upstream failed',
+      error: friendlyBriefError(err instanceof Error ? err.message : 'Brief upstream failed', provider),
     })
   }
 }

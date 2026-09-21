@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allowedBriefUpstream, chatCompletionsUrl, sanitizeModel } from './allow'
+import { allowedBriefUpstream, chatCompletionsUrl, friendlyBriefError, sanitizeModel } from './allow'
 
 describe('brief upstream allowlist', () => {
   it('locks Ollama to loopback:11434', () => {
@@ -18,5 +18,13 @@ describe('brief upstream allowlist', () => {
     expect(allowedBriefUpstream('openai-compat', '')).toBeNull()
     expect(chatCompletionsUrl('https://api.openai.com/v1')).toBe('https://api.openai.com/v1/chat/completions')
     expect(sanitizeModel('  gpt-4o-mini  ')).toBe('gpt-4o-mini')
+  })
+})
+
+describe('friendly brief errors', () => {
+  it('maps connection failures to an honest empty Ollama ERR', () => {
+    expect(friendlyBriefError('fetch failed', 'ollama')).toMatch(/127\.0\.0\.1:11434/)
+    expect(friendlyBriefError('ECONNREFUSED', 'openai-compat')).toMatch(/not reachable/)
+    expect(friendlyBriefError('model not found', 'ollama')).toBe('model not found')
   })
 })

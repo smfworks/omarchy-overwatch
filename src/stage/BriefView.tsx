@@ -14,7 +14,7 @@ export function BriefView() {
       )}
       {brief.status === 'err' && (
         <div className="empty">
-          ERR — {brief.error ?? 'brief unavailable'}. Nothing was invented.
+          ERR — {brief.error ?? 'brief unavailable'} Nothing was invented.
           <div className="actions" style={{ marginTop: 12 }}>
             <button type="button" className="btn ghost" onClick={() => setHelpOpen(true)}>
               Brief settings

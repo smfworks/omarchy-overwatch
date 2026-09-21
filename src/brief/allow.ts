@@ -62,3 +62,13 @@ export function ollamaChatUrl(origin: string): string {
 export function ollamaTagsUrl(origin: string): string {
   return `${origin.replace(/\/$/, '')}/api/tags`
 }
+
+export function friendlyBriefError(raw: string, provider: BriefProvider): string {
+  const msg = raw.trim() || 'request failed'
+  if (/fetch failed|econnrefused|enotfound|network error|abort/i.test(msg)) {
+    return provider === 'ollama'
+      ? 'Ollama is not reachable at http://127.0.0.1:11434. BRIEF stays empty.'
+      : 'Brief API is not reachable. BRIEF stays empty.'
+  }
+  return msg
+}

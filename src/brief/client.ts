@@ -1,4 +1,4 @@
-import { allowedBriefUpstream, chatCompletionsUrl, ollamaChatUrl, ollamaTagsUrl } from './allow'
+import { allowedBriefUpstream, chatCompletionsUrl, friendlyBriefError, ollamaChatUrl, ollamaTagsUrl } from './allow'
 import { BRIEF_SYSTEM_PROMPT } from './snapshot'
 import { OLLAMA_ORIGIN, type BriefPrefsV1, type BriefSnapshot } from './types'
 
@@ -112,14 +112,14 @@ export async function requestBrief(prefs: BriefPrefsV1, snapshot: BriefSnapshot)
         data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string'
           ? (data as { error: string }).error
           : `BRIEF HTTP ${res.status}`
-      return { ok: false, error: `${err} No brief was invented.` }
+      return { ok: false, error: friendlyBriefError(err, prefs.provider) }
     }
     const text = prefs.provider === 'ollama' ? parseOllamaContent(data) : parseOpenAiContent(data)
-    if (!text) return { ok: false, error: 'BRIEF ERR — model returned empty text. Nothing was invented.' }
+    if (!text) return { ok: false, error: 'Model returned empty text. BRIEF stays empty.' }
     return { ok: true, text, model: prefs.model.trim() }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'network error'
-    return { ok: false, error: `BRIEF ERR — ${msg}. Empty on purpose.` }
+    return { ok: false, error: friendlyBriefError(msg, prefs.provider) }
   }
 }
 
