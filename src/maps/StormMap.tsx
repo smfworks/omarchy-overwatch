@@ -8,6 +8,7 @@ import { mapFxClass } from './markers'
 import { OsmFallback } from './OsmFallback'
 import { NIGHT_RASTER_FALLBACK, attributionFor, styleSpecFor, type MapStyleId } from './styles'
 import { weatherKindLabel } from './weather'
+import { observeMapSize } from './lifecycle'
 
 type RadarState = 'loading' | 'live' | 'err' | 'empty'
 
@@ -73,6 +74,39 @@ export function StormMap({
     })
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
     new Marker({ color: '#ff5d6c' }).setLngLat([point.lng, point.lat]).addTo(map)
+    const stopResize = observeMapSize(map, el)
+    let painted = false
+    map.on('data', (ev) => {
+      if ('tile' in ev && ev.tile && (!('sourceId' in ev) || ev.sourceId !== 'radar')) painted = true
+    })
+    const sizeWatch = window.setTimeout(() => {
+      try {
+        map.resize()
+        const canvas = map.getCanvas()
+        if (canvas.clientWidth < 2 || canvas.clientHeight < 2) {
+          setMapFailed('Map canvas had no size')
+          setRadar((prev) =>
+            prev.status === 'live' ? prev : { status: 'err', error: 'Map canvas had no size', time: prev.time },
+          )
+        }
+      } catch {
+        setMapFailed('Map canvas had no size')
+      }
+    }, 280)
+    const tileWatch = window.setTimeout(() => {
+      let tiles = painted
+      try {
+        tiles = tiles || map.areTilesLoaded()
+      } catch {
+        /* style not ready */
+      }
+      if (!tiles) {
+        setMapFailed('Basemap tiles did not load')
+        setRadar((prev) =>
+          prev.status === 'live' ? prev : { status: 'err', error: 'Basemap unavailable', time: prev.time },
+        )
+      }
+    }, 8000)
 
     let cancelled = false
     map.on('load', () => {
@@ -142,6 +176,9 @@ export function StormMap({
 
     return () => {
       cancelled = true
+      window.clearTimeout(tileWatch)
+      window.clearTimeout(sizeWatch)
+      stopResize()
       try {
         map.remove()
       } catch {
@@ -155,7 +192,13 @@ export function StormMap({
       {mapFailed ? (
         <OsmFallback lat={point.lat} lng={point.lng} zoom={7} label={weatherKindLabel(point)} />
       ) : (
-        <div ref={ref} className="locality-map" role="region" aria-label={`Storm map: ${weatherKindLabel(point)}`} />
+        <div
+          ref={ref}
+          className="locality-map"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          role="region"
+          aria-label={`Storm map: ${weatherKindLabel(point)}`}
+        />
       )}
       {onMapStyle && onNvg && <MapStylePack style={mapStyle} nvg={nvg} onStyle={onMapStyle} onNvg={onNvg} />}
       {nvg && <div className="map-fx-nvg" aria-hidden="true" />}

@@ -17,7 +17,7 @@ export function HelpOverlay() {
         </p>
         <ul>
           <li>
-            <kbd>/</kbd> focus catalog search
+            <kbd>/</kbd> focus catalog filter · left rail web search opens the selected engine with your query (Enter or an engine button). No scraped results.
           </li>
           <li>
             <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> / <kbd>k</kbd> global search palette (tools, live points, HEAT, headlines, pins)
@@ -54,7 +54,8 @@ export function HelpOverlay() {
           FLIR / CRT are aesthetic tints only. Dangerous weather (NWS / EONET / NHC) opens a storm map with optional
           RainViewer radar. ADS-B/AIS trails are a client ring buffer of sampled polls — not full-sky coverage. Status is
           LIVE / STALE / ERR / OFF — never invented intel. Passive vs active OPSEC is labeled per tool. Open tool may
-          prompt for optional domain/email/hash fields and an OPSEC reminder; the catalog URL is not turned into a scanner.
+          prompt for optional fields and an OPSEC reminder. Search engines open with your query; other catalog URLs are
+          not turned into a scanner.
         </p>
         <div className="count-line">HEAT (attention)</div>
         <p className="case-hint">{HEAT_FORMULA_HELP}</p>

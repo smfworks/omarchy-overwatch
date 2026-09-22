@@ -17,6 +17,7 @@ import {
 import { aoiToGeoJSON, sanitizeAoi } from '../aoi/geo'
 import { useOverwatch } from '../state/context'
 import { craftKind } from '../craft/icons'
+import { observeMapSize } from './lifecycle'
 
 export interface ExtraMapMarker {
   id: string
@@ -237,6 +238,29 @@ export function LocalityMap({
       setStyleReady((n) => n + 1)
     }
     map.on('load', onLoad)
+    const stopResize = observeMapSize(map, el)
+    let painted = false
+    map.on('data', (ev) => {
+      if ('tile' in ev && ev.tile) painted = true
+    })
+    const sizeWatch = window.setTimeout(() => {
+      try {
+        map.resize()
+        const canvas = map.getCanvas()
+        if (canvas.clientWidth < 2 || canvas.clientHeight < 2) setFailed('Map canvas had no size')
+      } catch {
+        setFailed('Map canvas had no size')
+      }
+    }, 280)
+    const tileWatch = window.setTimeout(() => {
+      let tiles = painted
+      try {
+        tiles = tiles || map.areTilesLoaded()
+      } catch {
+        /* style not ready */
+      }
+      if (!tiles) setFailed('Basemap tiles did not load')
+    }, 8000)
     map.on('moveend', () => {
       const c = map.getCenter()
       reportMapView({ lat: c.lat, lng: c.lng, zoom: map.getZoom() })
@@ -256,6 +280,9 @@ export function LocalityMap({
     })
 
     return () => {
+      window.clearTimeout(tileWatch)
+      window.clearTimeout(sizeWatch)
+      stopResize()
       try {
         marker.remove()
         extras.forEach((m) => m.remove())
@@ -408,7 +435,13 @@ export function LocalityMap({
 
   return (
     <div className={mapFxClass(nvg || overlay === 'nvg', fx)}>
-      <div ref={ref} className="locality-map" role="region" aria-label={`Locality map: ${label}`} />
+      <div
+        ref={ref}
+        className="locality-map"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        role="region"
+        aria-label={`Locality map: ${label}`}
+      />
       {onMapStyle && onNvg && <MapStylePack style={mapStyle} nvg={nvg} onStyle={onMapStyle} onNvg={onNvg} />}
       <div className="map-attrib-note">{attributionFor(mapStyle)}</div>
       {(nvg || overlay === 'nvg') && <div className="map-fx-nvg" aria-hidden="true" />}
