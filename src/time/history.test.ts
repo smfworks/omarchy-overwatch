@@ -20,7 +20,11 @@ describe('time history ring buffer', () => {
   it('keeps previously polled dated points when a later poll omits them', () => {
     ingestHistory('earthquakes', [quake('eq-1', '2026-09-21T10:00:00Z')], Date.parse('2026-09-21T11:00:00Z'))
     ingestHistory('earthquakes', [quake('eq-2', '2026-09-21T11:30:00Z')], Date.parse('2026-09-21T12:00:00Z'))
-    const merged = mergeHistory('earthquakes', [quake('eq-2', '2026-09-21T11:30:00Z')])
+    const merged = mergeHistory(
+      'earthquakes',
+      [quake('eq-2', '2026-09-21T11:30:00Z')],
+      Date.parse('2026-09-21T12:00:00Z'),
+    )
     expect(merged.map((p) => p.id).sort()).toEqual(['eq-1', 'eq-2'])
   })
 
