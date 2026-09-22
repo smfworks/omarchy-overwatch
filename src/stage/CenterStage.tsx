@@ -139,7 +139,11 @@ export function CenterStage() {
     overlay === 'nvg' ? 'nvg' : overlay === 'flir' ? 'flir' : overlay === 'crt' ? 'crt' : ''
 
   return (
-    <div className={`stage${fxClass ? ` fx-${fxClass}` : ''}${heatEnabled ? ' heat-on' : ''}`}>
+    <div
+      className={`stage${fxClass ? ` fx-${fxClass}` : ''}${heatEnabled ? ' heat-on' : ''}`}
+      data-testid="center-stage"
+      data-stage={stage}
+    >
       <span className="corner tl" />
       <span className="corner tr" />
       <span className="corner bl" />
@@ -147,7 +151,7 @@ export function CenterStage() {
       <StageErrorBoundary onReset={goBack}>
         <Suspense fallback={<StageFallback />}>
           {stage === 'globe' ? (
-            <div className="stage-globe">
+            <div className="stage-globe" data-testid="stage-globe">
               <OverwatchGlobe />
             </div>
           ) : null}
@@ -195,10 +199,18 @@ export function CenterStage() {
       <RegionDossier />
       {stage !== 'globe' && (
         <div className="stage-chrome">
-          <button type="button" className="btn stage-back" onClick={goBack} title="Back to globe (Esc or b)">
+          <button
+            type="button"
+            className="btn stage-back"
+            data-testid="stage-back"
+            onClick={goBack}
+            title="Back to globe (Esc or b)"
+          >
             ← Globe
           </button>
-          <div className="stage-title">{stageTitle(stage, label)}</div>
+          <div className="stage-title" data-testid="stage-title">
+            {stageTitle(stage, label)}
+          </div>
         </div>
       )}
       {hudDensity === 'presentation' && (

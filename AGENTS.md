@@ -67,9 +67,9 @@ Globe textures live in `public/globe/` (no unpkg). Offline machines will show an
 ```bash
 npm install
 npm test
-npm run dev
 npm run build
 npm run preview
+npm run test:smoke   # Playwright critical-path gate (search / map / back)
 ```
 
 ## Omarchy

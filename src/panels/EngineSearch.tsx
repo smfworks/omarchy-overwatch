@@ -81,6 +81,7 @@ export function EngineSearch() {
   return (
     <form
       className="engine-search"
+      data-testid="engine-search"
       onSubmit={(e) => {
         e.preventDefault()
         run(engineId)
@@ -91,6 +92,7 @@ export function EngineSearch() {
         <span>Engine</span>
         <select
           aria-label="Search engine"
+          data-testid="engine-select"
           value={engineId}
           onChange={(e) => setEngineId(e.target.value)}
         >
@@ -107,13 +109,14 @@ export function EngineSearch() {
           ref={inputRef}
           className="search engine-query"
           aria-label="Search query"
+          data-testid="engine-query"
           placeholder="Query — Enter or Search opens the engine"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
       <div className="engine-actions">
-        <button type="submit" className="btn">
+        <button type="submit" className="btn" data-testid="engine-submit">
           Search
         </button>
         {QUICK.map((tool) => (
@@ -129,10 +132,15 @@ export function EngineSearch() {
       </div>
       {notice && <p className="engine-notice">{notice}</p>}
       {launches.length > 0 && (
-        <ul className="engine-results" aria-label="Opened searches">
+        <ul className="engine-results" aria-label="Opened searches" data-testid="engine-results">
           {launches.map((launch) => (
             <li key={launch.id}>
-              <a href={launch.href} target="_blank" rel="noopener noreferrer">
+              <a
+                href={launch.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="engine-result-link"
+              >
                 {launch.engine}: {launch.query}
               </a>
               <span className="engine-result-meta">

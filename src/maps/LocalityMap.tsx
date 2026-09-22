@@ -438,6 +438,7 @@ export function LocalityMap({
       <div
         ref={ref}
         className="locality-map"
+        data-testid="locality-map"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         role="region"
         aria-label={`Locality map: ${label}`}
