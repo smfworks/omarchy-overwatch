@@ -9,6 +9,7 @@ import type { GeoPoint } from './layers'
 import type { TrackTrail } from './tracks'
 import { craftMarkerElement } from '../craft/icons'
 import { terminatorCoords } from '../solar/terminator'
+import { HOME_GLOBE_POV } from './camera'
 
 const NIGHT = '/globe/earth-night.jpg'
 const BUMP = '/globe/earth-topology.png'
@@ -87,8 +88,18 @@ export function OverwatchGlobe() {
   flyToRef.current = flyTo
 
   useEffect(() => {
-    if (flyTo) globeRef.current?.pointOfView(flyTo, reducedMotion ? 0 : 900)
-  }, [flyTo, reducedMotion])
+    if (stage !== 'globe' || !flyTo) return
+    let cancelled = false
+    const apply = () => {
+      if (!cancelled) globeRef.current?.pointOfView(flyTo, reducedMotion ? 0 : 900)
+    }
+    apply()
+    const raf = window.requestAnimationFrame(apply)
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(raf)
+    }
+  }, [flyTo, reducedMotion, stage])
 
   useEffect(() => {
     const controls = globeRef.current?.controls()
@@ -96,14 +107,15 @@ export function OverwatchGlobe() {
   }, [stage, selection, reducedMotion])
 
   useEffect(() => {
+    if (stage !== 'globe') return
     const id = window.setInterval(() => {
       const pov = globeRef.current?.pointOfView()
-      if (pov && Number.isFinite(pov.lat) && Number.isFinite(pov.lng) && Number.isFinite(pov.altitude)) {
+      if (pov && Number.isFinite(pov.lat) && Number.isFinite(pov.lng) && Number.isFinite(pov.altitude) && pov.altitude > 0) {
         reportGlobePov({ lat: pov.lat, lng: pov.lng, altitude: pov.altitude })
       }
     }, 800)
     return () => window.clearInterval(id)
-  }, [reportGlobePov])
+  }, [reportGlobePov, stage])
 
   const selectedId = selection?.kind === 'point' ? selection.point.id : null
   const selectedHotspotId = selection?.kind === 'hotspot' ? selection.hotspot.id : null
@@ -295,8 +307,9 @@ export function OverwatchGlobe() {
             controls.autoRotateSpeed = 0.28
             controls.enableDamping = !reducedMotion
           }
-          const resume = flyToRef.current
-          globeRef.current?.pointOfView(resume ?? { lat: 18, lng: 25, altitude: 2.4 }, 0)
+          const resume = flyToRef.current ?? HOME_GLOBE_POV
+          globeRef.current?.pointOfView(resume, 0)
+          reportGlobePov(resume)
         }}
         onGlobeClick={({ lat, lng }: { lat: number; lng: number }) => {
           const hs = nearestHotspot(lat, lng)

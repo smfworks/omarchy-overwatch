@@ -2,6 +2,7 @@ import { CATEGORIES, type CategoryId } from '../catalog/types'
 import { TOOLS } from '../catalog/tools'
 import { useOverwatch } from '../state/context'
 import { isPinned } from '../favorites/storage'
+import { EngineSearch } from './EngineSearch'
 
 export function CatalogPanel() {
   const { filters, setFilters, visibleTools, selection, selectTool, searchRef, favorites, toggleFavorite } =
@@ -33,6 +34,7 @@ export function CatalogPanel() {
     <>
       <div className="panel-head">Catalog</div>
       <div className="panel-body">
+        <EngineSearch />
         <div className="search-wrap">
           <span>/</span>
           <input

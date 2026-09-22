@@ -15,6 +15,7 @@ import type { CaseStoreV1 } from './cases/types'
 import { HOTSPOTS, type Hotspot } from './data/hotspots'
 import { fetchTicker, type FeedRuntime, type FeedStatus, type TickerItem } from './feeds/rss'
 import { loadFeedPrefs, saveFeedPrefs, sanitizeFeedPrefs, type FeedPrefsV1 } from './feeds/storage'
+import { captureRestorePov } from './globe/camera'
 import { classifyStatus, type GeoPoint, type LayerState } from './globe/layers'
 import { LAYER_DEFS } from './globe/registry'
 import { clearTracksForLayer, ingestTrackPoints, trailsFromBuffer, type TrackTrail } from './globe/tracks'
@@ -368,26 +369,35 @@ function Provider({ children }: { children: ReactNode }) {
 
   const openStage = useCallback((mode: StageMode) => {
     window.clearTimeout(stageTimerRef.current)
-    if (mode !== 'globe' && !restorePovRef.current && globePovRef.current) {
-      restorePovRef.current = globePovRef.current
+    if (mode !== 'globe') {
+      restorePovRef.current = captureRestorePov(restorePovRef.current, globePovRef.current ?? flyTo)
     }
     setStage(mode)
-  }, [])
+  }, [flyTo])
 
   const goBack = useCallback(() => {
     window.clearTimeout(stageTimerRef.current)
-    setStage('globe')
-    const pov = restorePovRef.current
+    const pov = captureRestorePov(restorePovRef.current, globePovRef.current ?? flyTo)
     restorePovRef.current = null
-    if (pov) setFlyTo({ ...pov })
+    globePovRef.current = { ...pov }
+    setStage('globe')
+    setFlyTo({ ...pov })
+  }, [flyTo])
+
+  const cancelLocalityFly = useCallback(() => {
+    window.clearTimeout(stageTimerRef.current)
+    if (!restorePovRef.current) return
+    const pov = captureRestorePov(restorePovRef.current, null)
+    restorePovRef.current = null
+    globePovRef.current = { ...pov }
+    setFlyTo({ ...pov })
   }, [])
 
   const scheduleLocality = useCallback(
     (target: CameraPov, mode: StageMode, key: string) => {
       window.clearTimeout(stageTimerRef.current)
-      if (stage !== 'globe' && !restorePovRef.current && globePovRef.current) {
-        restorePovRef.current = globePovRef.current
-      }
+      // Snapshot before the fly. The zoomed camera must not become the restore POV.
+      restorePovRef.current = captureRestorePov(restorePovRef.current, globePovRef.current ?? flyTo)
       setStage('globe')
       setFlyTo(target)
       sharePovRef.current = { lat: target.lat, lng: target.lng, z: altitudeToZoom(target.altitude) }
@@ -397,13 +407,10 @@ function Provider({ children }: { children: ReactNode }) {
           (sel?.kind === 'hotspot' && sel.hotspot.id === key) ||
           (sel?.kind === 'point' && sel.point.id === key) ||
           (sel?.kind === 'heat' && sel.cell.id === key)
-        if (still) {
-          if (!restorePovRef.current && globePovRef.current) restorePovRef.current = globePovRef.current
-          setStage(mode)
-        }
+        if (still) setStage(mode)
       }, flyDuration)
     },
-    [stage, flyDuration],
+    [flyTo, flyDuration],
   )
 
   const selectTool = useCallback(
@@ -1070,6 +1077,7 @@ function Provider({ children }: { children: ReactNode }) {
           return
         }
         if (selection) {
+          cancelLocalityFly()
           setSelection(null)
           return
         }
@@ -1115,6 +1123,7 @@ function Provider({ children }: { children: ReactNode }) {
   }, [
     aoi,
     casesDrawerOpen,
+    cancelLocalityFly,
     cycleHudDensity,
     cycleMapStyle,
     drawMode,

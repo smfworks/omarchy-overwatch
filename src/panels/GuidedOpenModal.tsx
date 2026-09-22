@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { InputKind, OsintTool } from '../catalog/types'
+import { toolLaunchUrl } from '../search/engines'
 import { useOverwatch } from '../state/context'
 
 const FIELD_LABEL: Partial<Record<InputKind, string>> = {
@@ -28,17 +29,29 @@ export function GuidedOpenModal() {
   const fields = guidedTool.inputs.filter((k) => FIELD_LABEL[k])
   const proceed = () => {
     const filled = fields.map((k) => values[k]?.trim()).filter(Boolean)
-    if (filled.length && navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(filled.join('\n'))
+    const launch = toolLaunchUrl(guidedTool, values)
+    if (filled.length && !launch.queried && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(filled.join('\n')).catch(() => {
+        /* clipboard is optional — still open the destination */
+      })
     }
-    openUrl(guidedTool.url)
+    openUrl(launch.href)
     setGuidedTool(null)
     setValues({})
   }
 
   return (
     <div className="help-overlay" onClick={() => setGuidedTool(null)}>
-      <div className="help-card guided-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <form
+        className="help-card guided-card"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        onSubmit={(e) => {
+          e.preventDefault()
+          proceed()
+        }}
+      >
         <h2>Open {guidedTool.name}</h2>
         <p className="case-hint">
           {guidedTool.opsec === 'active'
@@ -46,8 +59,8 @@ export function GuidedOpenModal() {
             : 'OPSEC: PASSIVE — this source mainly queries a public index. Still assume logging at the far end.'}
         </p>
         <p className="case-hint">
-          Overwatch OSINT for Omarchy is a launcher. Optional fields below are copied to the clipboard for you to paste
-          on the destination — the catalog URL is not rewritten into a scanner.
+          Overwatch OSINT for Omarchy is a launcher. Search engines open with your query. Other tools keep the catalog
+          URL — optional fields are copied for you to paste, not turned into a scanner.
         </p>
         {fields.map((kind) => (
           <label key={kind} className="case-label">
@@ -61,7 +74,7 @@ export function GuidedOpenModal() {
           </label>
         ))}
         <div className="actions">
-          <button type="button" className="btn" onClick={proceed}>
+          <button type="submit" className="btn">
             Open destination
           </button>
           <button
@@ -75,7 +88,7 @@ export function GuidedOpenModal() {
             Cancel
           </button>
         </div>
-      </div>
+      </form>
     </div>
   )
 }

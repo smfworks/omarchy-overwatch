@@ -1,12 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { colorForKind } from '../globe/colors'
 import { useOverwatch } from '../state/context'
 import { StageErrorBoundary } from './StageErrorBoundary'
 import { TimeScrubber } from '../time/TimeScrubber'
 import { LayerLegend } from '../legend/LayerLegend'
 import { RegionDossier } from '../region/RegionDossier'
-import { prefersReducedMotion } from '../hud/motion'
-
 const OverwatchGlobe = lazy(() => import('../globe/OverwatchGlobe').then((m) => ({ default: m.OverwatchGlobe })))
 const LocalityMap = lazy(() => import('../maps/LocalityMap').then((m) => ({ default: m.LocalityMap })))
 const StormMap = lazy(() => import('../maps/StormMap').then((m) => ({ default: m.StormMap })))
@@ -45,31 +43,11 @@ export function CenterStage() {
     setMapNvg,
     trails,
     overlay,
-    reducedMotion,
     hudDensity,
     setSearchOpen,
     setHelpOpen,
     cycleHudDensity,
   } = useOverwatch()
-  const [globeOn, setGlobeOn] = useState(true)
-  const [globeFading, setGlobeFading] = useState(false)
-  const reduce = reducedMotion || prefersReducedMotion()
-
-  useEffect(() => {
-    if (stage === 'globe') {
-      setGlobeFading(false)
-      const id = window.setTimeout(() => setGlobeOn(true), reduce ? 0 : 80)
-      return () => window.clearTimeout(id)
-    }
-    if (stage === 'map' || stage === 'storm') {
-      setGlobeOn(true)
-      setGlobeFading(true)
-      const id = window.setTimeout(() => setGlobeOn(false), reduce ? 0 : 520)
-      return () => window.clearTimeout(id)
-    }
-    setGlobeOn(false)
-    setGlobeFading(false)
-  }, [stage, reduce])
 
   const label =
     selection?.kind === 'tool'
@@ -168,8 +146,8 @@ export function CenterStage() {
       <span className="corner br" />
       <StageErrorBoundary onReset={goBack}>
         <Suspense fallback={<StageFallback />}>
-          {globeOn ? (
-            <div className={`stage-globe${globeFading ? ' fading' : ''}${stage !== 'globe' ? ' is-hidden' : ''}`}>
+          {stage === 'globe' ? (
+            <div className="stage-globe">
               <OverwatchGlobe />
             </div>
           ) : null}
