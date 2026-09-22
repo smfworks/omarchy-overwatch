@@ -77,7 +77,12 @@ export function DetailPanel() {
           )}
           <div className="count-line">Demo beacons</div>
           {HOTSPOTS.map((hs) => (
-            <button key={hs.id} className="tool-card selectable" onClick={() => selectHotspot(hs)}>
+            <button
+              key={hs.id}
+              className="tool-card selectable"
+              data-testid={`demo-beacon-${hs.id}`}
+              onClick={() => selectHotspot(hs)}
+            >
               <h3>{hs.name}</h3>
               <p>
                 {hs.lat.toFixed(2)}°, {hs.lng.toFixed(2)}° · {hs.kind}

@@ -13,8 +13,8 @@ export function OsmFallback({
   const delta = zoom >= 10 ? 0.08 : 0.35
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - delta}%2C${lat - delta}%2C${lng + delta}%2C${lat + delta}&layer=mapnik&marker=${lat}%2C${lng}`
   return (
-    <div className="osm-fallback">
-      <iframe title={`OpenStreetMap: ${label}`} src={src} className="osm-frame" />
+    <div className="osm-fallback" data-testid="osm-fallback">
+      <iframe title={`OpenStreetMap: ${label}`} src={src} className="osm-frame" data-testid="osm-fallback-frame" />
       <div className="disclaimer osm-note">
         MapLibre WebGL was unavailable — showing the public OpenStreetMap embed instead. Roads/borders are OSM
         tiles, not invented. © OpenStreetMap contributors.

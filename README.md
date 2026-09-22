@@ -273,6 +273,18 @@ Schema: `id, name, category, subcategory?, url, description, tags[], opsec, pric
 
 `npm test` (Vitest) validates schema, unique HTTPS URLs, category coverage, and filters.
 
+### Runtime smoke (Playwright)
+
+Thin critical-path gate (not a full WebCraftBench clone). Hard-fails on dead left-rail search submit, blank/zero-size locality map after hotspot zoom, and broken back/Esc restore to the globe.
+
+```bash
+npm run build
+npm run test:smoke          # starts preview on :4173 via Playwright webServer
+# or: npm run preview & npx playwright test --project=smoke
+```
+
+First run may need Chromium: `npx playwright install chromium`. CI runs the same path in `.github/workflows/smoke.yml`.
+
 ## Stack
 
 Vite · React 19 · TypeScript · `react-globe.gl` (Three.js) · MapLibre GL · H3 (`h3-js`) · `satellite.js` (SAT worker) · custom dock layout · dark glass HUD CSS.
