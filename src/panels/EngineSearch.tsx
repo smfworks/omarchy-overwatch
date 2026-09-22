@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { TOOLS } from '../catalog/tools'
 import { engineSearchUrl, engineSupportsQuery } from '../search/engines'
 import { useOverwatch } from '../state/context'
+import { openExternal } from './openExternal'
 
 interface Launch {
   id: string
@@ -15,12 +16,8 @@ interface Launch {
 const ENGINES = TOOLS.filter((tool) => tool.category === 'search-engines')
 const QUICK = ENGINES.filter((tool) => engineSupportsQuery(tool.id))
 
-function openExternal(href: string): boolean {
-  const popup = window.open(href, '_blank')
-  if (!popup) return false
-  popup.opener = null
-  return true
-}
+const POPUP_BLOCKED =
+  'App window blocked an auto-open — click the result link (or allow popups). Overwatch does not scrape the engine.'
 
 export function EngineSearch() {
   const { selection } = useOverwatch()
@@ -49,11 +46,7 @@ export function EngineSearch() {
     const href = engineSearchUrl(tool.id, q)
     if (href) {
       const opened = openExternal(href)
-      setNotice(
-        opened
-          ? null
-          : 'Popup blocked. Use the result link below — Overwatch does not scrape the engine.',
-      )
+      setNotice(opened ? null : POPUP_BLOCKED)
       setLaunches((prev) =>
         [{ id: `${tool.id}:${q}:${Date.now()}`, engine: tool.name, query: q, href, queried: true, opened }, ...prev].slice(0, 8),
       )
@@ -61,7 +54,9 @@ export function EngineSearch() {
     }
     const opened = openExternal(tool.url)
     setNotice(
-      `${tool.name} has no single public query URL in the catalog. Opened the tool page. No results were scraped or invented.`,
+      opened
+        ? `${tool.name} has no single public query URL in the catalog. Opened the tool page. No results were scraped or invented.`
+        : `${tool.name} has no single public query URL in the catalog. App window blocked an auto-open — click the catalog link (or allow popups). No results were scraped or invented.`,
     )
     setLaunches((prev) =>
       [

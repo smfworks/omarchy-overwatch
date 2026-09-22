@@ -74,9 +74,10 @@ test.describe('critical-path smoke', () => {
   test('left-rail search: Enter and Search button both launch results UI', async ({ page }) => {
     const consoleErrors = await prepareHud(page)
 
-    // Stub popups — we assert Overwatch UI state, not remote engine HTML.
-    await page.evaluate(() => {
-      window.open = () => null
+    // Launch may open a real browsing context (anchor click and/or window.open).
+    // Assert Overwatch's result link, not remote engine HTML.
+    page.on('popup', (popup) => {
+      void popup.close()
     })
 
     const query = page.getByTestId('engine-query')
@@ -99,13 +100,14 @@ test.describe('critical-path smoke', () => {
     expect(hrefAfterClick).toMatch(/^https:\/\//)
     expect(hrefAfterClick).toMatch(/public|sources/i)
 
-    // Popup may be blocked in headless — notice or result list is honest feedback.
+    // Headless may block the auto-open. The result link is the contract; a notice
+    // is only the honest fallback and must not claim we scraped the engine.
+    await expect(results).toBeVisible()
     const notice = page.locator('.engine-notice')
-    const noticeText = (await notice.count()) ? await notice.textContent() : ''
-    expect(
-      (await results.count()) > 0 || (noticeText ?? '').length > 0,
-      'submit must show results list and/or popup-blocked notice',
-    ).toBeTruthy()
+    if (await notice.count()) {
+      await expect(notice).toContainText(/does not scrape/i)
+      await expect(notice).toContainText(/result link/i)
+    }
 
     const fatal = consoleErrors.filter(
       (m) => !/ResizeObserver|favicon|Failed to load resource/i.test(m),
