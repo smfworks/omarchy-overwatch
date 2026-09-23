@@ -167,4 +167,58 @@ test.describe('critical-path smoke', () => {
     )
     expect(fatal, `uncaught console errors: ${fatal.join(' | ')}`).toEqual([])
   })
+
+  test('sensor legend toggles, signal guide closes on Esc, theater chip restores on Back', async ({
+    page,
+  }) => {
+    await page.route('**/proxy/usgs/**', (route) => route.abort())
+    const consoleErrors = await prepareHud(page)
+
+    await expect(page.getByTestId('integrity-gap')).toContainText(/USGS ERR/i, { timeout: 20_000 })
+    await expect(page.getByTestId('layer-legend')).toBeVisible()
+    await expect(page.getByTestId('poll-delta')).toBeVisible()
+    await expect(page.getByTestId('poll-delta')).toContainText(/no successful poll yet|baseline|no change|Δ /i)
+    await expect(page.getByTestId('theater-chips')).toBeVisible()
+
+    const quakes = page.getByTestId('layer-toggle-earthquakes')
+    await expect(quakes).toHaveAttribute('aria-pressed', 'true')
+    await quakes.click()
+    await expect(quakes).toHaveAttribute('aria-pressed', 'false')
+    await quakes.click()
+    await expect(quakes).toHaveAttribute('aria-pressed', 'true')
+
+    const firms = page.getByTestId('layer-toggle-firms')
+    await expect(firms).toHaveAttribute('aria-pressed', 'false')
+    await page.keyboard.press('f')
+    await expect(firms).toHaveAttribute('aria-pressed', 'true')
+    await page.keyboard.press('f')
+    await expect(firms).toHaveAttribute('aria-pressed', 'false')
+
+    await page.getByTestId('signal-guide-open').click()
+    await expect(page.getByTestId('signal-guide')).toBeVisible()
+    await expect(page.getByTestId('signal-guide')).toContainText(/does not scrape/i)
+    await expect(page.getByTestId('signal-guide')).toContainText(/country-anchor/i)
+    await expect(page.getByTestId('signal-guide')).toContainText(/not strikes/i)
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('signal-guide')).toHaveCount(0)
+
+    await page.getByTestId('theater-europe').click()
+    await expect(page.getByTestId('center-stage')).toHaveAttribute('data-stage', 'globe')
+    await expect(page.getByTestId('center-stage')).toHaveAttribute('data-theater', 'europe')
+    await expect(page.getByTestId('center-stage')).toHaveAttribute('data-camera-lat', '50')
+    await expect(page.getByTestId('stage-back')).toBeVisible()
+    await expect(page.getByTestId('stage-title')).toContainText(/Camera · EUROPE/i)
+
+    await page.getByTestId('stage-back').click()
+    await expect(page.getByTestId('center-stage')).toHaveAttribute('data-stage', 'globe')
+    await expect(page.getByTestId('center-stage')).toHaveAttribute('data-theater', '')
+    await expect(page.getByTestId('center-stage')).not.toHaveAttribute('data-camera-lat', '50')
+    await expect(page.getByTestId('stage-back')).toHaveCount(0)
+    await expect(page.getByTestId('stage-globe')).toBeVisible()
+
+    const fatal = consoleErrors.filter(
+      (m) => !/ResizeObserver|favicon|Failed to load resource|WebGL|maplibre/i.test(m),
+    )
+    expect(fatal, `uncaught console errors: ${fatal.join(' | ')}`).toEqual([])
+  })
 })

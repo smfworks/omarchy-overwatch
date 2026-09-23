@@ -107,8 +107,10 @@ Selecting a catalog card or ticker headline opens an **in-depth center stage** (
 | --- | --- |
 | `/` | Focus catalog search |
 | `⌘K` / `Ctrl+K` / `k` | Global search palette (catalog, live points, HEAT, headlines, pins) |
-| `Esc` | Close search → guided open → region summary → tour → help → case notes → clear AOI → back to globe → clear selection → clear query |
-| `b` | Back to globe from map / storm / depth / brief |
+| `Esc` | Close search → guided open → region summary → tour → signal guide → help → case notes → clear AOI → back to globe → clear selection → clear query |
+| `q` / `e` / `a` / `f` | Toggle USGS / EONET / ADS-B / FIRMS |
+| `g` | Signal Guide |
+| `b` | Back to globe from map / storm / depth / brief, or restore the camera after a theater chip |
 | `1` / `2` / `3` / `4` | Toggle left / right / top / bottom |
 | `n` | Case notes drawer |
 | `d` | Cycle HUD density Operator / Minimal / Presentation |
@@ -117,7 +119,7 @@ Selecting a catalog card or ticker headline opens an **in-depth center stage** (
 
 ## Globe layers
 
-Toggles in the status strip. Status is **LIVE**, **STALE**, **ERR**, or **OFF** — never invented points.
+Toggles in the status strip and on the globe sensor legend. Each legend row is a clickable on/off control with a live count, not a display-only swatch. Status is **LIVE**, **STALE**, **ERR**, or **OFF** — never invented points. Enabled ERR/STALE layers show a gap badge. Poll Δ compares entity IDs after a successful fetch. Theater chips move the camera only.
 
 Enabled layers **poll** on their own cadence (about 45s–3 min). Glowing globe highlights are driven by the latest live/stale points. Curated demo beacons stay as navigation only. Add a row in `src/globe/registry.ts` to register a new public layer (fetch + poll + LIVE/STALE/ERR/OFF) — do not invent points.
 

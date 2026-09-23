@@ -17,7 +17,7 @@ export const DEFAULT_HUD_PREFS: HudPrefsV1 = {
   version: 1,
   density: 'operator',
   overlay: 'off',
-  legendOpen: false,
+  legendOpen: true,
 }
 
 export function isHudDensity(raw: unknown): raw is HudDensity {

@@ -23,10 +23,16 @@ export function HelpOverlay() {
             <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> / <kbd>k</kbd> global search palette (tools, live points, HEAT, headlines, pins)
           </li>
           <li>
-            <kbd>Esc</kbd> close search → guided open → region summary → tour → help → case notes → clear AOI → back to globe → clear selection → clear query
+            <kbd>Esc</kbd> close search → guided open → region summary → tour → signal guide → help → case notes → clear AOI → back to globe → clear selection → clear query
           </li>
           <li>
-            <kbd>b</kbd> back to globe from map / storm / depth / brief
+            <kbd>q</kbd> USGS · <kbd>e</kbd> EONET · <kbd>a</kbd> ADS-B · <kbd>f</kbd> FIRMS — toggle those layers
+          </li>
+          <li>
+            <kbd>g</kbd> Signal Guide (what LIVE / STALE / ERR, counts, and poll deltas do not mean)
+          </li>
+          <li>
+            <kbd>b</kbd> back to globe from map / storm / depth / brief, or restore the camera after a theater chip
           </li>
           <li>
             <kbd>n</kbd> case notes drawer (local scratchpad)

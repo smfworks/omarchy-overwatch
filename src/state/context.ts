@@ -18,6 +18,7 @@ import type { FavoritesV1 } from '../favorites/storage'
 import type { HudDensity, MapOverlay } from '../hud/density'
 import type { RegionSummary } from '../region/summary'
 import type { StatusCounts } from '../status/counts'
+import type { PollDeltaRecord } from '../legend/stats'
 
 export type StageMode = 'globe' | 'map' | 'storm' | 'depth' | 'brief'
 
@@ -117,6 +118,11 @@ export interface OverwatchState {
   setOverlay: (overlay: MapOverlay) => void
   legendOpen: boolean
   setLegendOpen: (open: boolean) => void
+  pollDeltas: Record<string, PollDeltaRecord>
+  activeTheater: string | null
+  flyTheater: (id: string) => void
+  signalGuideOpen: boolean
+  setSignalGuideOpen: (open: boolean) => void
   tourOpen: boolean
   tourStep: number
   nextTour: () => void
