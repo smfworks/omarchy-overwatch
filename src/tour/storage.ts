@@ -14,7 +14,7 @@ export const TOUR_STEPS = [
   {
     id: 'layers',
     title: 'Public layers',
-    body: 'Status-strip toggles poll USGS, EONET, ADS-B, NWS, AIS, FIRMS, GDACS, SAT, NHC, NIFC, and ReliefWeb. Keys stay in local .env. A missing key is ERR, not fake tracks.',
+    body: 'The sensor legend and status strip toggle USGS, EONET, ADS-B, NWS, AIS, FIRMS, GDACS, SAT, NHC, NIFC, and ReliefWeb. Keys q, e, a, and f toggle USGS, EONET, ADS-B, and FIRMS. A missing key is ERR, not fake tracks. Poll Δ compares ids after a real fetch.',
   },
   {
     id: 'heat',

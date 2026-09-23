@@ -3,7 +3,11 @@ import { colorForKind } from '../globe/colors'
 import { useOverwatch } from '../state/context'
 import { StageErrorBoundary } from './StageErrorBoundary'
 import { TimeScrubber } from '../time/TimeScrubber'
+import { IntegrityGap } from '../legend/IntegrityGap'
 import { LayerLegend } from '../legend/LayerLegend'
+import { PollDeltaStrip } from '../legend/PollDeltaStrip'
+import { TheaterChips } from '../legend/TheaterChips'
+import { theaterById } from '../legend/theaters'
 import { RegionDossier } from '../region/RegionDossier'
 const OverwatchGlobe = lazy(() => import('../globe/OverwatchGlobe').then((m) => ({ default: m.OverwatchGlobe })))
 const LocalityMap = lazy(() => import('../maps/LocalityMap').then((m) => ({ default: m.LocalityMap })))
@@ -47,6 +51,8 @@ export function CenterStage() {
     setSearchOpen,
     setHelpOpen,
     cycleHudDensity,
+    activeTheater,
+    flyTo,
   } = useOverwatch()
 
   const label =
@@ -143,6 +149,9 @@ export function CenterStage() {
       className={`stage${fxClass ? ` fx-${fxClass}` : ''}${heatEnabled ? ' heat-on' : ''}`}
       data-testid="center-stage"
       data-stage={stage}
+      data-theater={activeTheater ?? ''}
+      data-camera-lat={flyTo ? String(flyTo.lat) : ''}
+      data-camera-lng={flyTo ? String(flyTo.lng) : ''}
     >
       <span className="corner tl" />
       <span className="corner tr" />
@@ -191,25 +200,30 @@ export function CenterStage() {
         </Suspense>
       </StageErrorBoundary>
       {(stage === 'globe' || stage === 'map' || stage === 'storm') && (
-        <div className="stage-tools">
-          <TimeScrubber />
+        <div className={`stage-tools${stage !== 'globe' || activeTheater ? ' below-chrome' : ''}`}>
+          <IntegrityGap />
+          <TheaterChips />
           <LayerLegend />
+          <PollDeltaStrip />
+          <TimeScrubber />
         </div>
       )}
       <RegionDossier />
-      {stage !== 'globe' && (
+      {(stage !== 'globe' || activeTheater) && (
         <div className="stage-chrome">
           <button
             type="button"
             className="btn stage-back"
             data-testid="stage-back"
             onClick={goBack}
-            title="Back to globe (Esc or b)"
+            title={stage === 'globe' ? 'Restore previous globe camera (Esc or b)' : 'Back to globe (Esc or b)'}
           >
-            ← Globe
+            {stage === 'globe' ? '← Back' : '← Globe'}
           </button>
           <div className="stage-title" data-testid="stage-title">
-            {stageTitle(stage, label)}
+            {stage === 'globe' && activeTheater
+              ? `Camera · ${theaterById(activeTheater)?.label ?? activeTheater}`
+              : stageTitle(stage, label)}
           </div>
         </div>
       )}

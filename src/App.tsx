@@ -75,6 +75,10 @@ import {
 import { prefersReducedMotion } from './hud/motion'
 import { summarizeRegion, type RegionSummary } from './region/summary'
 import { countLayerStatuses } from './status/counts'
+import { diffEntityIds, type PollDeltaRecord } from './legend/stats'
+import { layerIdForShortcut } from './legend/shortcuts'
+import { theaterById } from './legend/theaters'
+import { SignalGuide } from './panels/SignalGuide'
 import { buildWorkspaceBackup, parseWorkspaceBackup, workspaceFilename } from './workspace/backup'
 import { loadTourCompleted, saveTourCompleted, TOUR_STEPS } from './tour/storage'
 import { SearchPalette } from './search/SearchPalette'
@@ -174,6 +178,10 @@ function Provider({ children }: { children: ReactNode }) {
     return loadMapStylePrefs().nvg ? 'nvg' : 'off'
   })
   const [legendOpen, setLegendOpen] = useState(() => loadHudPrefs().legendOpen)
+  const [pollDeltas, setPollDeltas] = useState<Record<string, PollDeltaRecord>>({})
+  const [activeTheater, setActiveTheater] = useState<string | null>(null)
+  const [signalGuideOpen, setSignalGuideOpen] = useState(false)
+  const pollIdsRef = useRef<Record<string, string[]>>({})
   const [tourOpen, setTourOpen] = useState(() => !loadTourCompleted())
   const [tourStep, setTourStep] = useState(0)
   const [mapView, setMapView] = useState<{ lat: number; lng: number; zoom: number } | null>(null)
@@ -380,6 +388,7 @@ function Provider({ children }: { children: ReactNode }) {
     const pov = captureRestorePov(restorePovRef.current, globePovRef.current ?? flyTo)
     restorePovRef.current = null
     globePovRef.current = { ...pov }
+    setActiveTheater(null)
     setStage('globe')
     setFlyTo({ ...pov })
   }, [flyTo])
@@ -495,6 +504,13 @@ function Provider({ children }: { children: ReactNode }) {
     try {
       const points = await def.fetch()
       const updatedAt = Date.now()
+      const previousIds = pollIdsRef.current[def.id] ?? null
+      const delta = diffEntityIds(previousIds, points.map((point) => point.id))
+      pollIdsRef.current[def.id] = points.map((point) => point.id)
+      setPollDeltas((prev) => ({
+        ...prev,
+        [def.id]: { layerId: def.id, label: def.label, at: updatedAt, delta },
+      }))
       ingestHistory(def.id, points, updatedAt)
       persistHistory()
       if (def.id === 'opensky' || def.id === 'ais') {
@@ -538,7 +554,7 @@ function Provider({ children }: { children: ReactNode }) {
 
   const toggleLayer = useCallback(
     (id: string) => {
-      const current = layers.find((l) => l.id === id)
+      const current = layersRef.current.find((l) => l.id === id)
       if (!current) return
       if (current.enabled) {
         setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: false, status: 'off' } : l)))
@@ -550,7 +566,26 @@ function Provider({ children }: { children: ReactNode }) {
       }
       void loadLayer(id)
     },
-    [layers, loadLayer],
+    [loadLayer],
+  )
+
+  const flyTheater = useCallback(
+    (id: string) => {
+      const theater = theaterById(id)
+      if (!theater) return
+      window.clearTimeout(stageTimerRef.current)
+      restorePovRef.current = captureRestorePov(restorePovRef.current, globePovRef.current ?? flyTo)
+      setActiveTheater(theater.id)
+      setSelection(null)
+      setStage('globe')
+      setFlyTo({ ...theater.pov })
+      sharePovRef.current = {
+        lat: theater.pov.lat,
+        lng: theater.pov.lng,
+        z: altitudeToZoom(theater.pov.altitude),
+      }
+    },
+    [flyTo],
   )
 
   const refreshLayers = useCallback(() => {
@@ -1050,6 +1085,11 @@ function Provider({ children }: { children: ReactNode }) {
           skipTour()
           return
         }
+        if (signalGuideOpen) {
+          e.preventDefault()
+          setSignalGuideOpen(false)
+          return
+        }
         if (helpOpen) {
           e.preventDefault()
           setHelpOpen(false)
@@ -1070,7 +1110,7 @@ function Provider({ children }: { children: ReactNode }) {
           setAoi(null)
           return
         }
-        if (stage !== 'globe') {
+        if (stage !== 'globe' || activeTheater) {
           e.preventDefault()
           e.stopPropagation()
           goBack()
@@ -1088,7 +1128,7 @@ function Provider({ children }: { children: ReactNode }) {
         target?.blur?.()
       }
       if (typing) return
-      if ((e.key === 'b' || e.key === 'B') && stage !== 'globe') {
+      if ((e.key === 'b' || e.key === 'B') && (stage !== 'globe' || activeTheater)) {
         e.preventDefault()
         e.stopPropagation()
         goBack()
@@ -1109,6 +1149,19 @@ function Provider({ children }: { children: ReactNode }) {
       if (e.key === '2') togglePanel('right')
       if (e.key === '3') togglePanel('top')
       if (e.key === '4') togglePanel('bottom')
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !signalGuideOpen && !helpOpen && !searchOpen && !tourOpen) {
+        const shortcutLayer = layerIdForShortcut(e.key)
+        if (shortcutLayer) {
+          e.preventDefault()
+          toggleLayer(shortcutLayer)
+          return
+        }
+        if (e.key === 'g' || e.key === 'G') {
+          e.preventDefault()
+          setSignalGuideOpen(true)
+          return
+        }
+      }
       if (e.key === '[') {
         e.preventDefault()
         cycleMapStyle(-1)
@@ -1131,12 +1184,15 @@ function Provider({ children }: { children: ReactNode }) {
     focusSearch,
     goBack,
     guidedTool,
+    activeTheater,
     helpOpen,
     regionSummary,
     searchOpen,
     selection,
+    signalGuideOpen,
     skipTour,
     stage,
+    toggleLayer,
     togglePanel,
     tourOpen,
   ])
@@ -1225,6 +1281,11 @@ function Provider({ children }: { children: ReactNode }) {
     setOverlay,
     legendOpen,
     setLegendOpen,
+    pollDeltas,
+    activeTheater,
+    flyTheater,
+    signalGuideOpen,
+    setSignalGuideOpen,
     tourOpen,
     tourStep,
     nextTour,
@@ -1253,6 +1314,7 @@ export default function App() {
           center={<CenterStage />}
         />
         <HelpOverlay />
+        <SignalGuide />
         <CaseNotesDrawer />
         <SearchPalette />
         <GuidedOpenModal />
