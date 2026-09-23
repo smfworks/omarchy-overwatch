@@ -197,6 +197,8 @@ test.describe('critical-path smoke', () => {
     await page.getByTestId('signal-guide-open').click()
     await expect(page.getByTestId('signal-guide')).toBeVisible()
     await expect(page.getByTestId('signal-guide')).toContainText(/does not scrape/i)
+    await expect(page.getByTestId('signal-guide')).toContainText(/country-anchor/i)
+    await expect(page.getByTestId('signal-guide')).toContainText(/not strikes/i)
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('signal-guide')).toHaveCount(0)
 

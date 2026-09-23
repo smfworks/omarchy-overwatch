@@ -1672,10 +1672,19 @@ a {
 }
 
 .guide-entry p {
-  margin: 0;
+  margin: 0 0 4px;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.guide-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-right: 6px;
 }
 
 .legend-swatch {

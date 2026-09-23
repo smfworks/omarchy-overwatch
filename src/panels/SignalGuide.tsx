@@ -21,7 +21,15 @@ export function SignalGuide() {
         {SIGNAL_GUIDE.map((entry) => (
           <section key={entry.id} className="guide-entry">
             <h3>{entry.title}</h3>
-            <p>{entry.body}</p>
+            <p>
+              <span className="guide-label">Meaning</span> {entry.meaning}
+            </p>
+            <p>
+              <span className="guide-label">Matters</span> {entry.matters}
+            </p>
+            <p>
+              <span className="guide-label">Not meaning</span> {entry.notMeaning}
+            </p>
           </section>
         ))}
         <div className="count-line">Layer keys</div>
