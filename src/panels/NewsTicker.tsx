@@ -143,7 +143,8 @@ export function NewsTicker() {
           </form>
           {formError && <div className="ticker-msg">{formError}</div>}
           <p className="disclaimer">
-            http/https only. Custom feeds are fetched through the local Vite <code>/proxy/rss</code> and stored in{' '}
+            Public http/https only. Private, loopback, and link-local addresses are rejected. Custom feeds are fetched
+            through the local Vite <code>/proxy/rss</code> and stored in{' '}
             <code>omarchy-overwatch.feeds.v1</code>. Status is LIVE / STALE / ERR / OFF per feed — no invented
             headlines.
           </p>

@@ -52,7 +52,7 @@ Browser calls go through Vite `server.proxy` / `preview.proxy` plus `vite.live-f
 
 No API keys in the repo. Optional keys live in `.env` (see `.env.example`): `AISSTREAM_API_KEY`, `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET`, `OPENSKY_USERNAME` / `OPENSKY_PASSWORD`, `FIRMS_MAP_KEY`. Never commit secrets. If a feed needs a key and none is configured, show `ERR` / empty — do not invent geodata.
 
-OpenStreetMap raster (DEFAULT), Esri World Imagery (SATELLITE, attributed), OpenFreeMap dark (NIGHT) and RainViewer public endpoints need no key. Custom RSS URLs must be `http`/`https` only.
+OpenStreetMap raster (DEFAULT), Esri World Imagery (SATELLITE, attributed), OpenFreeMap dark (NIGHT) and RainViewer public endpoints need no key. Custom RSS URLs must be public `http`/`https`. `/proxy/rss` rejects loopback, link-local, private, and CGNAT targets, re-checks every redirect, and pins DNS to the address it already allowed. It does not forward auth tokens. Dev and preview bind `127.0.0.1` unless `vite --host` is passed explicitly.
 
 Case notes persist in `omarchy-overwatch.cases.v1`. Feed prefs persist in `omarchy-overwatch.feeds.v1`. Heat toggle persists in `omarchy-overwatch.heat.v1`. Map style persists in `omarchy-overwatch.mapstyle.v1`. Optional brief prefs/key persist in `omarchy-overwatch.brief.v1` (never commit). Named views persist in `omarchy-overwatch.views.v1`. Favorites/recents persist in `omarchy-overwatch.favorites.v1`. HUD density/overlay persist in `omarchy-overwatch.hud.v1`. First-run tour completion persists in `omarchy-overwatch.tour.v1`. Do not auto-fill notes or pins.
 
@@ -65,7 +65,7 @@ Globe textures live in `public/globe/` (no unpkg). Offline machines will show an
 ## Commands
 
 ```bash
-npm install
+npm ci
 npm test
 npm run build
 npm run preview

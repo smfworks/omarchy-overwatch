@@ -26,7 +26,7 @@ if ! command -v npm >/dev/null; then
   exit 1
 fi
 
-npm install
+npm ci
 npm test
 npm run build
 

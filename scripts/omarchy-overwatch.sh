@@ -16,7 +16,7 @@ if ! command -v npm >/dev/null; then
 fi
 
 if [[ ! -d dist ]]; then
-  npm install
+  npm ci
   npm run build
 fi
 

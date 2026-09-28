@@ -1,3 +1,5 @@
+import { vetFeedUrl } from '../net/ssrf'
+
 export const FEEDS_KEY = 'omarchy-overwatch.feeds.v1'
 export const CUSTOM_FEEDS_MAX = 12
 export const FEED_URL_MAX = 500
@@ -28,15 +30,7 @@ export const DEFAULT_FEED_PREFS: FeedPrefsV1 = {
 export function isAllowedFeedUrl(raw: string): boolean {
   const t = raw.trim()
   if (!t || t.length > FEED_URL_MAX) return false
-  let parsed: URL
-  try {
-    parsed = new URL(t)
-  } catch {
-    return false
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
-  if (!parsed.hostname) return false
-  return true
+  return vetFeedUrl(t).ok
 }
 
 export function normalizeFeedUrl(raw: string): string | null {
@@ -116,7 +110,7 @@ export function saveFeedPrefs(prefs: FeedPrefsV1): void {
 
 export function addCustomFeed(prefs: FeedPrefsV1, urlRaw: string, labelRaw?: string): FeedPrefsV1 | { error: string } {
   const url = normalizeFeedUrl(urlRaw)
-  if (!url) return { error: 'URL must be http or https' }
+  if (!url) return { error: 'URL must be public http or https' }
   if (prefs.custom.some((f) => f.url === url)) return { error: 'Feed already added' }
   if (prefs.custom.length >= CUSTOM_FEEDS_MAX) return { error: `At most ${CUSTOM_FEEDS_MAX} custom feeds` }
   const label = (labelRaw ?? '').replace(/\s+/g, ' ').trim().slice(0, FEED_LABEL_MAX) || labelFromFeedUrl(url)

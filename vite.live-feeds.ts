@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite'
+import { guardedRequest } from './vite.guarded-fetch'
 
 type EnvMap = Record<string, string>
 
@@ -166,12 +167,15 @@ async function proxyOpenSky(env: EnvMap, res: SimpleRes): Promise<void> {
     const next = { ...headers }
     if (authorization) next.Authorization = authorization
     else delete next.Authorization
-    return fetch('https://opensky-network.org/api/states/all', {
+    return guardedRequest({
+      rawUrl: 'https://opensky-network.org/api/states/all',
+      mode: 'pinned',
+      allowHosts: ['opensky-network.org'],
       headers: next,
-      signal: AbortSignal.timeout(12_000),
+      timeoutMs: 12_000,
     })
   }
-  let upstream: Response
+  let upstream: Awaited<ReturnType<typeof call>>
   try {
     upstream = await call(auth)
   } catch (err) {
@@ -181,16 +185,22 @@ async function proxyOpenSky(env: EnvMap, res: SimpleRes): Promise<void> {
     })
     return
   }
+  if (!upstream.ok) {
+    sendJson(res, upstream.status, { error: upstream.error })
+    return
+  }
   if (upstream.status === 401 && auth?.startsWith('Bearer ')) {
     try {
       const refreshed = await openSkyAuthorization(env, true)
-      if (refreshed) upstream = await call(refreshed)
+      if (refreshed) {
+        const retry = await call(refreshed)
+        if (retry.ok) upstream = retry
+      }
     } catch {
       /* keep original 401 */
     }
   }
-  const text = await upstream.text()
-  sendText(res, upstream.status, text, upstream.headers.get('content-type') || 'application/json')
+  sendText(res, upstream.status, upstream.body, upstream.contentType || 'application/json')
 }
 
 type AisVessel = NonNullable<ReturnType<typeof vesselFromAisMessage>>
@@ -264,39 +274,35 @@ function collectAisSnapshot(apiKey: string, collectMs = 2600, maxUnique = 120): 
   })
 }
 
-function allowedRssTarget(raw: string | null): string | null {
-  if (!raw) return null
-  let parsed: URL
-  try {
-    parsed = new URL(raw)
-  } catch {
-    return null
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-  if (!parsed.hostname) return null
-  return parsed.href
-}
-
 async function proxyRss(req: SimpleReq, res: SimpleRes): Promise<void> {
   const raw = req.url ?? ''
   const q = raw.includes('?') ? new URL(raw, 'http://overwatch.local').searchParams.get('url') : null
-  const target = allowedRssTarget(q)
-  if (!target) {
-    sendJson(res, 400, { error: 'Only http/https RSS or Atom URLs are allowed. No headlines were invented.' })
+  if (!q) {
+    sendJson(res, 400, {
+      error:
+        'Only public http/https RSS or Atom URLs are allowed. Private, loopback, and link-local targets are rejected. No headlines were invented.',
+    })
     return
   }
   try {
-    const upstream = await fetch(target, {
-      headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
-      signal: AbortSignal.timeout(12_000),
-      redirect: 'follow',
+    const upstream = await guardedRequest({
+      rawUrl: q,
+      mode: 'feed',
+      headers: {
+        'User-Agent': UA,
+        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+      },
+      timeoutMs: 12_000,
     })
-    const text = await upstream.text()
     if (!upstream.ok) {
-      sendJson(res, upstream.status, { error: text.slice(0, 220) || `RSS HTTP ${upstream.status}` })
+      sendJson(res, upstream.status, { error: upstream.error })
       return
     }
-    sendText(res, 200, text, upstream.headers.get('content-type') || 'application/xml; charset=utf-8')
+    if (upstream.status < 200 || upstream.status >= 300) {
+      sendJson(res, upstream.status, { error: upstream.body.slice(0, 220) || `RSS HTTP ${upstream.status}` })
+      return
+    }
+    sendText(res, 200, upstream.body, upstream.contentType || 'application/xml; charset=utf-8')
   } catch (err) {
     sendJson(res, 502, {
       error: err instanceof Error ? err.message : 'RSS proxy failed',
@@ -314,13 +320,22 @@ async function proxyFirmsApi(env: EnvMap, res: SimpleRes): Promise<void> {
     return
   }
   const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/VIIRS_SNPP_NRT/world/1`
-  const upstream = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/csv,text/plain,*/*' } })
-  const text = await upstream.text()
+  const upstream = await guardedRequest({
+    rawUrl: url,
+    mode: 'pinned',
+    allowHosts: ['firms.modaps.eosdis.nasa.gov'],
+    headers: { 'User-Agent': UA, Accept: 'text/csv,text/plain,*/*' },
+    timeoutMs: 20_000,
+  })
   if (!upstream.ok) {
-    sendJson(res, upstream.status, { error: text.slice(0, 240) || `FIRMS API HTTP ${upstream.status}` })
+    sendJson(res, upstream.status, { error: upstream.error })
     return
   }
-  sendText(res, 200, text, 'text/csv; charset=utf-8')
+  if (upstream.status < 200 || upstream.status >= 300) {
+    sendJson(res, upstream.status, { error: upstream.body.slice(0, 240) || `FIRMS API HTTP ${upstream.status}` })
+    return
+  }
+  sendText(res, 200, upstream.body, 'text/csv; charset=utf-8')
 }
 
 export function liveFeedsPlugin(env: EnvMap): Plugin {

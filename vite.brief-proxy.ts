@@ -7,6 +7,7 @@ import {
   ollamaTagsUrl,
 } from './src/brief/allow'
 import { OLLAMA_ORIGIN } from './src/brief/types'
+import { guardedRequest } from './vite.guarded-fetch'
 
 const UA = 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)'
 const BODY_MAX = 800_000
@@ -91,12 +92,23 @@ async function probeOllama(res: SimpleRes): Promise<void> {
     return
   }
   try {
-    const upstream = await fetch(ollamaTagsUrl(origin), {
+    const upstream = await guardedRequest({
+      rawUrl: ollamaTagsUrl(origin),
+      mode: 'brief',
       headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: AbortSignal.timeout(4000),
+      timeoutMs: 4000,
     })
-    const data = (await upstream.json().catch(() => null)) as { models?: { name?: string }[]; error?: string } | null
     if (!upstream.ok) {
+      sendJson(res, upstream.status, { error: friendlyBriefError(upstream.error, 'ollama') })
+      return
+    }
+    let data: { models?: { name?: string }[]; error?: string } | null = null
+    try {
+      data = JSON.parse(upstream.body) as { models?: { name?: string }[]; error?: string }
+    } catch {
+      data = null
+    }
+    if (upstream.status < 200 || upstream.status >= 300) {
       sendJson(res, upstream.status, {
         error: data?.error || `Ollama HTTP ${upstream.status}. BRIEF stays empty.`,
       })
@@ -163,37 +175,35 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
     return
   }
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': UA,
+  }
+  if (provider === 'openai-compat') headers.Authorization = `Bearer ${key}`
+  const target = provider === 'ollama' ? ollamaChatUrl(origin) : chatCompletionsUrl(origin)
+  const payload =
+    provider === 'ollama'
+      ? { model, messages: row.messages, stream: false }
+      : { model, messages: row.messages, temperature: 0.2, max_tokens: 800 }
+
   try {
-    if (provider === 'ollama') {
-      const upstream = await fetch(ollamaChatUrl(origin), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
-        body: JSON.stringify({ model, messages: row.messages, stream: false }),
-        signal: AbortSignal.timeout(45_000),
-      })
-      const text = await upstream.text()
-      res.statusCode = upstream.status
-      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json; charset=utf-8')
-      res.setHeader('Cache-Control', 'no-store')
-      res.end(text)
+    const upstream = await guardedRequest({
+      rawUrl: target,
+      mode: 'brief',
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      timeoutMs: 45_000,
+    })
+    if (!upstream.ok) {
+      sendJson(res, upstream.status, { error: friendlyBriefError(upstream.error, provider) })
       return
     }
-    const upstream = await fetch(chatCompletionsUrl(origin), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent': UA,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ model, messages: row.messages, temperature: 0.2, max_tokens: 800 }),
-      signal: AbortSignal.timeout(45_000),
-    })
-    const text = await upstream.text()
     res.statusCode = upstream.status
-    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json; charset=utf-8')
+    res.setHeader('Content-Type', upstream.contentType || 'application/json; charset=utf-8')
     res.setHeader('Cache-Control', 'no-store')
-    res.end(text)
+    res.end(upstream.body)
   } catch (err) {
     sendJson(res, 502, {
       error: friendlyBriefError(err instanceof Error ? err.message : 'Brief upstream failed', provider),
