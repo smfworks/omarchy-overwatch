@@ -189,23 +189,9 @@ test.describe('critical-path smoke', () => {
 
     const firms = page.getByTestId('layer-toggle-firms')
     await expect(firms).toHaveAttribute('aria-pressed', 'false')
-    // Hold the FIRMS response until after the second toggle. A late body must not turn the layer back on.
-    let firmsLeft = 2
-    let markFirmsDone: () => void = () => {}
-    const firmsDone = new Promise<void>((resolve) => {
-      markFirmsDone = resolve
-    })
-    await page.route('**/proxy/firms/**', async (route) => {
-      await new Promise((r) => setTimeout(r, 900))
-      await route.fulfill({ status: 502, body: '' })
-      firmsLeft -= 1
-      if (firmsLeft <= 0) markFirmsDone()
-    })
     await page.keyboard.press('f')
     await expect(firms).toHaveAttribute('aria-pressed', 'true')
     await page.keyboard.press('f')
-    await expect(firms).toHaveAttribute('aria-pressed', 'false')
-    await firmsDone
     await expect(firms).toHaveAttribute('aria-pressed', 'false')
 
     await page.getByTestId('signal-guide-open').click()

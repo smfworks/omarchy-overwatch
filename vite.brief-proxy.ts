@@ -1,11 +1,12 @@
 import type { Plugin } from 'vite'
 import {
-  allowedBriefUpstream,
+  briefForwardPolicy,
   chatCompletionsUrl,
   friendlyBriefError,
   ollamaChatUrl,
   ollamaTagsUrl,
 } from './src/brief/allow'
+import { PROXY_CALLER_ERROR, proxyCallerAllowed, type AllowedDevHosts } from './src/net/devHost'
 import { OLLAMA_ORIGIN } from './src/brief/types'
 import { guardedRequest } from './vite.guarded-fetch'
 
@@ -86,15 +87,18 @@ function readBody(req: SimpleReq): Promise<string> {
 }
 
 async function probeOllama(res: SimpleRes): Promise<void> {
-  const origin = allowedBriefUpstream('ollama', OLLAMA_ORIGIN)
-  if (!origin) {
+  const policy = briefForwardPolicy('ollama', OLLAMA_ORIGIN)
+  if (!policy) {
     sendJson(res, 500, { error: 'Ollama origin is not allowed.' })
     return
   }
   try {
     const upstream = await guardedRequest({
-      rawUrl: ollamaTagsUrl(origin),
+      rawUrl: ollamaTagsUrl(policy.origin),
       mode: 'brief',
+      allowHosts: policy.allowHosts,
+      configuredHost: policy.configuredHost,
+      loopbackPort: policy.loopbackPort,
       headers: { 'User-Agent': UA, Accept: 'application/json' },
       timeoutMs: 4000,
     })
@@ -153,10 +157,11 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
     return
   }
   const baseUrl = typeof row.baseUrl === 'string' ? row.baseUrl : ''
-  const origin = allowedBriefUpstream(provider, baseUrl)
-  if (!origin) {
+  const policy = briefForwardPolicy(provider, baseUrl)
+  if (!policy) {
     sendJson(res, 400, {
-      error: 'BRIEF ERR — upstream not allowed. Ollama is loopback:11434; BYOK must be https or http loopback.',
+      error:
+        'BRIEF ERR — upstream not allowed. The API key is sent only to a known provider or the one configured base URL, over https, or to loopback http on the configured port.',
     })
     return
   }
@@ -181,7 +186,7 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
     'User-Agent': UA,
   }
   if (provider === 'openai-compat') headers.Authorization = `Bearer ${key}`
-  const target = provider === 'ollama' ? ollamaChatUrl(origin) : chatCompletionsUrl(origin)
+  const target = provider === 'ollama' ? ollamaChatUrl(policy.origin) : chatCompletionsUrl(policy.origin)
   const payload =
     provider === 'ollama'
       ? { model, messages: row.messages, stream: false }
@@ -194,6 +199,9 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
+      allowHosts: policy.allowHosts,
+      configuredHost: policy.configuredHost,
+      loopbackPort: policy.loopbackPort,
       timeoutMs: 45_000,
     })
     if (!upstream.ok) {
@@ -211,9 +219,17 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
   }
 }
 
+function isProxyPath(url: string): boolean {
+  return url === '/proxy' || url.startsWith('/proxy/')
+}
+
 export function briefProxyPlugin(): Plugin {
-  const handler = (req: SimpleReq, res: SimpleRes, next: () => void) => {
+  const handler = (req: SimpleReq, res: SimpleRes, next: () => void, allowedHosts: AllowedDevHosts) => {
     const url = pathOf(req.url)
+    if (isProxyPath(url) && !proxyCallerAllowed(req.headers, allowedHosts)) {
+      sendJson(res, 403, { error: PROXY_CALLER_ERROR })
+      return
+    }
     if (url === '/proxy/brief/ollama' && (req.method === 'GET' || req.method === 'HEAD')) {
       void probeOllama(res).catch((err: unknown) => {
         sendJson(res, 502, { error: err instanceof Error ? err.message : 'Ollama probe failed' })
@@ -232,13 +248,15 @@ export function briefProxyPlugin(): Plugin {
   return {
     name: 'omarchy-brief-proxy',
     configureServer(server) {
+      const allowedHosts = server.config.server.allowedHosts ?? []
       server.middlewares.use((req, res, next) => {
-        handler(req as SimpleReq, res as SimpleRes, next)
+        handler(req as SimpleReq, res as SimpleRes, next, allowedHosts)
       })
     },
     configurePreviewServer(server) {
+      const allowedHosts = server.config.preview.allowedHosts ?? []
       server.middlewares.use((req, res, next) => {
-        handler(req as SimpleReq, res as SimpleRes, next)
+        handler(req as SimpleReq, res as SimpleRes, next, allowedHosts)
       })
     },
   }

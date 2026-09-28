@@ -26,6 +26,8 @@ async function run(args: {
   mode?: 'feed' | 'brief' | 'pinned'
   headers?: Record<string, string>
   allowHosts?: string[]
+  configuredHost?: string
+  loopbackPort?: number
   resolve?: (host: string) => Promise<ResolvedAddress[]>
   exchange?: (hop: Hop, headers: Record<string, string>) => Promise<ExchangeResult>
 }) {
@@ -41,6 +43,8 @@ async function run(args: {
       Accept: 'application/rss+xml',
     },
     allowHosts: args.allowHosts,
+    configuredHost: args.configuredHost,
+    loopbackPort: args.loopbackPort,
     resolve: args.resolve ?? publicResolver(),
     exchange: async (hop, headers) => {
       calls.push({ hop, headers })
@@ -236,6 +240,8 @@ describe('guarded feed fetch', () => {
   })
 })
 
+const OPENAI_ALLOW = ['api.openai.com', 'api.groq.com', 'llm.example']
+
 describe('brief and credentialed token forwarding', () => {
   it('never sends a brief token to a feed host', async () => {
     expect(isFeedUpstreamHost('earthquake.usgs.gov')).toBe(true)
@@ -244,6 +250,8 @@ describe('brief and credentialed token forwarding', () => {
     const { result, calls } = await run({
       rawUrl: 'https://earthquake.usgs.gov/v1/chat/completions',
       mode: 'brief',
+      allowHosts: ['earthquake.usgs.gov', 'api.openai.com'],
+      configuredHost: 'earthquake.usgs.gov',
       headers: { Authorization: 'Bearer sk-test', 'Content-Type': 'application/json' },
     })
     expect(result.ok).toBe(false)
@@ -251,20 +259,54 @@ describe('brief and credentialed token forwarding', () => {
     expect(calls).toHaveLength(0)
   })
 
-  it('sends a brief token only to a public non-feed host and refuses cross-host redirects', async () => {
+  it('sends a brief token only to the configured allowlisted host and refuses other hosts', async () => {
     const ok = await run({
       rawUrl: 'https://api.openai.com/v1/chat/completions',
       mode: 'brief',
+      allowHosts: OPENAI_ALLOW,
+      configuredHost: 'api.openai.com',
       headers: { Authorization: 'Bearer sk-test', 'Content-Type': 'application/json' },
     })
     expect(ok.result.ok).toBe(true)
     expect(ok.calls[0].headers.Authorization).toBe('Bearer sk-test')
     expect(ok.calls[0].headers['Content-Type']).toBe('application/json')
 
+    const otherKnown = await run({
+      rawUrl: 'https://api.groq.com/openai/v1/chat/completions',
+      mode: 'brief',
+      allowHosts: OPENAI_ALLOW,
+      configuredHost: 'api.openai.com',
+      headers: { Authorization: 'Bearer sk-test' },
+    })
+    expect(otherKnown.result.ok).toBe(false)
+    expect(otherKnown.calls).toHaveLength(0)
+
+    const stranger = await run({
+      rawUrl: 'https://collector.example/v1/chat/completions',
+      mode: 'brief',
+      allowHosts: OPENAI_ALLOW,
+      configuredHost: 'llm.example',
+      headers: { Authorization: 'Bearer sk-test' },
+    })
+    expect(stranger.result.ok).toBe(false)
+    expect(stranger.calls).toHaveLength(0)
+
+    const custom = await run({
+      rawUrl: 'https://llm.example/v1/chat/completions',
+      mode: 'brief',
+      allowHosts: OPENAI_ALLOW,
+      configuredHost: 'llm.example',
+      headers: { Authorization: 'Bearer sk-test' },
+    })
+    expect(custom.result.ok).toBe(true)
+    expect(custom.calls[0].headers.Authorization).toBe('Bearer sk-test')
+
     const seen: string[] = []
     const redirected = await run({
       rawUrl: 'https://api.openai.com/v1/chat/completions',
       mode: 'brief',
+      allowHosts: OPENAI_ALLOW,
+      configuredHost: 'api.openai.com',
       headers: { Authorization: 'Bearer sk-test' },
       exchange: async (hop, headers) => {
         seen.push(`${hop.url.hostname} ${headers.Authorization ?? ''}`)
@@ -279,19 +321,48 @@ describe('brief and credentialed token forwarding', () => {
     expect(seen).toEqual(['api.openai.com Bearer sk-test'])
   })
 
-  it('allows brief loopback and rejects brief targets that resolve privately', async () => {
+  it('allows brief http only on the configured loopback port', async () => {
     const local = await run({
       rawUrl: 'http://127.0.0.1:11434/api/chat',
       mode: 'brief',
+      allowHosts: ['127.0.0.1', 'localhost', 'api.openai.com'],
+      configuredHost: '127.0.0.1',
+      loopbackPort: 11434,
       headers: { 'Content-Type': 'application/json' },
     })
     expect(local.result.ok).toBe(true)
     expect(local.calls[0].hop.literal).toBe(true)
     expect(local.calls[0].hop.address).toBe('127.0.0.1')
 
+    const otherPort = await run({
+      rawUrl: 'http://127.0.0.1:9/secret',
+      mode: 'brief',
+      allowHosts: ['127.0.0.1', 'api.openai.com'],
+      configuredHost: '127.0.0.1',
+      loopbackPort: 11434,
+      headers: { Authorization: 'Bearer sk-test' },
+    })
+    expect(otherPort.result.ok).toBe(false)
+    if (!otherPort.result.ok) expect(otherPort.result.reason).toBe('address')
+    expect(otherPort.calls).toHaveLength(0)
+
+    const otherLoopback = await run({
+      rawUrl: 'http://127.8.8.8:11434/secret',
+      mode: 'brief',
+      allowHosts: ['127.8.8.8', '127.0.0.1'],
+      configuredHost: '127.8.8.8',
+      loopbackPort: 11434,
+      headers: { Authorization: 'Bearer sk-test' },
+    })
+    expect(otherLoopback.result.ok).toBe(false)
+    expect(otherLoopback.calls).toHaveLength(0)
+
     const named = await run({
       rawUrl: 'http://localhost:11434/api/chat',
       mode: 'brief',
+      allowHosts: ['localhost', 'api.openai.com'],
+      configuredHost: 'localhost',
+      loopbackPort: 11434,
       resolve: async () => [{ address: '127.0.0.1', family: 4 }],
       headers: {},
     })
@@ -300,6 +371,8 @@ describe('brief and credentialed token forwarding', () => {
     const privateNet = await run({
       rawUrl: 'https://llm.internal.example/v1/chat/completions',
       mode: 'brief',
+      allowHosts: ['llm.internal.example', 'api.openai.com'],
+      configuredHost: 'llm.internal.example',
       resolve: async () => [{ address: '192.168.1.20', family: 4 }],
       headers: { Authorization: 'Bearer sk-test' },
     })

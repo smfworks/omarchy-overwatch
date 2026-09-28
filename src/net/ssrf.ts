@@ -8,8 +8,10 @@
  * rebind the name.
  *
  * Authorization is never attached to feed-proxy requests. A brief API key is
- * not sent to known feed hosts. A credentialed upstream (OpenSky) keeps its
- * own token only while the hop host is on that call's allowlist.
+ * sent only to the configured host, which must be a known provider or that one
+ * base URL: https, or http to loopback on the configured port and no other.
+ * A credentialed upstream (OpenSky) keeps its own token only while the hop
+ * host is on that call's allowlist.
  */
 
 export type IpFamily = 4 | 6
@@ -285,13 +287,15 @@ function nameDenied(host: string, policy: 'feed' | 'brief'): boolean {
   return false
 }
 
-function selectAddress(addrs: ResolvedAddress[], policy: 'feed' | 'brief'): ResolvedAddress | null {
+function selectAddress(
+  addrs: ResolvedAddress[],
+  policy: 'feed' | 'brief',
+  allowLoopback: boolean,
+): ResolvedAddress | null {
   if (!addrs.length || addrs.some((item) => !isIpAddress(item.address))) return null
-  if (policy === 'brief') {
-    const allLoopback = addrs.every((item) => isLoopbackIp(item.address))
-    const allPublic = addrs.every((item) => !isBlockedIp(item.address))
-    if (allLoopback || allPublic) return addrs[0]
-    return null
+  if (policy === 'brief' && allowLoopback) {
+    if (!addrs.every((item) => isStrictLoopbackIp(item.address))) return null
+    return addrs[0]
   }
   if (addrs.some((item) => isBlockedIp(item.address))) return null
   return addrs[0]
@@ -326,27 +330,69 @@ export function vetFeedUrl(raw: string): { ok: true; url: URL } | Deny {
   return parsed
 }
 
+export interface BriefHopOptions {
+  /** Host of the one configured base URL. The key is not sent to any other host. */
+  configuredHost: string
+  /** Required for http. Only this loopback port is contacted. */
+  loopbackPort?: number
+}
+
+const BRIEF_ALLOW_ERROR =
+  'BRIEF ERR — API key is only sent to an allowlisted host (a known provider or the configured base URL).'
+const BRIEF_PORT_ERROR = 'BRIEF ERR — HTTP is only allowed to loopback on the configured port.'
+
+function urlPort(url: URL): number {
+  if (url.port) return Number(url.port)
+  return url.protocol === 'https:' ? 443 : 80
+}
+
+function isBriefLoopbackName(host: string): boolean {
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+}
+
+export function isStrictLoopbackIp(address: string): boolean {
+  const host = normalizeHost(address)
+  if (host === '127.0.0.1' || host === '::1') return true
+  const v6 = parseIpv6(host)
+  if (!v6 || !isV4Mapped(v6)) return false
+  return embeddedV4(v6) === v4(127, 0, 0, 1)
+}
+
 export async function planHop(
   url: URL,
   policy: 'feed' | 'brief',
   resolve: Resolver,
   allowHosts?: readonly string[],
+  brief?: BriefHopOptions,
 ): Promise<{ ok: true; hop: Hop } | Deny> {
   const parsed = parseHttpUrl(url.href)
   if (!parsed.ok) return parsed
   const host = normalizeHost(parsed.url.hostname)
-  if (allowHosts && !allowHosts.includes(host)) {
-    return deny('host', FEED_BLOCK_ERROR)
-  }
   if (policy === 'brief' && isFeedUpstreamHost(host)) {
     return deny('feed-host', 'BRIEF ERR — API key is not sent to feed hosts.')
   }
-  if (nameDenied(host, policy)) return deny('address', FEED_BLOCK_ERROR)
+  if (allowHosts && !allowHosts.includes(host)) {
+    return deny('host', policy === 'brief' ? BRIEF_ALLOW_ERROR : FEED_BLOCK_ERROR)
+  }
+  let allowLoopback = false
+  if (policy === 'brief') {
+    if (!brief || normalizeHost(brief.configuredHost) !== host) return deny('host', BRIEF_ALLOW_ERROR)
+    const port = urlPort(parsed.url)
+    if (parsed.url.protocol === 'http:') {
+      if (brief.loopbackPort === undefined || port !== brief.loopbackPort || !isBriefLoopbackName(host)) {
+        return deny('address', BRIEF_PORT_ERROR)
+      }
+      allowLoopback = true
+    } else if (isBriefLoopbackName(host)) {
+      return deny('address', BRIEF_PORT_ERROR)
+    }
+  }
+  if (nameDenied(host, policy)) return deny('address', policy === 'brief' ? BRIEF_ALLOW_ERROR : FEED_BLOCK_ERROR)
 
   if (isIpAddress(host)) {
     const family: IpFamily = parseIpv4(host) !== null ? 4 : 6
-    const selected = selectAddress([{ address: host, family }], policy)
-    if (!selected) return deny('address', FEED_BLOCK_ERROR)
+    const selected = selectAddress([{ address: host, family }], policy, allowLoopback)
+    if (!selected) return deny('address', policy === 'brief' && allowLoopback ? BRIEF_PORT_ERROR : FEED_BLOCK_ERROR)
     return { ok: true, hop: { url: parsed.url, address: host, family, literal: true } }
   }
 
@@ -356,10 +402,10 @@ export async function planHop(
   } catch {
     return deny('dns', 'Host could not be resolved. Nothing was invented.')
   }
-  const selected = selectAddress(addrs, policy)
+  const selected = selectAddress(addrs, policy, allowLoopback)
   if (!selected) {
     if (!addrs.length) return deny('dns', 'Host could not be resolved. Nothing was invented.')
-    return deny('address', FEED_BLOCK_ERROR)
+    return deny('address', policy === 'brief' && allowLoopback ? BRIEF_PORT_ERROR : FEED_BLOCK_ERROR)
   }
   return {
     ok: true,
@@ -404,9 +450,7 @@ export function upstreamHeaders(
 ): Record<string, string> {
   const host = normalizeHost(hopHost)
   const keepAuthorization =
-    mode === 'pinned'
-      ? Boolean(allowHosts?.includes(host))
-      : mode === 'brief' && !isFeedUpstreamHost(host)
+    mode === 'pinned' || mode === 'brief' ? Boolean(allowHosts?.includes(host)) : false
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(headers)) {
     const name = key.toLowerCase()
@@ -439,19 +483,33 @@ export async function runGuardedExchange(args: {
   resolve: Resolver
   exchange: (hop: Hop, headers: Record<string, string>) => Promise<ExchangeResult>
   allowHosts?: readonly string[]
+  configuredHost?: string
+  loopbackPort?: number
   maxRedirects?: number
 }): Promise<GuardResult> {
   const parsed = parseHttpUrl(args.rawUrl)
   if (!parsed.ok) return parsed
+  if (args.mode === 'brief' && (!args.allowHosts?.length || !args.configuredHost)) {
+    return deny('host', BRIEF_ALLOW_ERROR)
+  }
   const maxRedirects = args.maxRedirects ?? 5
   let current = parsed.url
   for (let hopIndex = 0; hopIndex <= maxRedirects; hopIndex += 1) {
     const policy = args.mode === 'brief' ? 'brief' : 'feed'
-    const allowHosts = args.mode === 'pinned' && hopIndex === 0 ? args.allowHosts : undefined
+    const allowHosts =
+      args.mode === 'brief' ? args.allowHosts : args.mode === 'pinned' && hopIndex === 0 ? args.allowHosts : undefined
     if (args.mode === 'pinned' && hopIndex === 0 && !args.allowHosts?.length) {
       return deny('host', FEED_BLOCK_ERROR)
     }
-    const planned = await planHop(current, policy, args.resolve, allowHosts)
+    const planned = await planHop(
+      current,
+      policy,
+      args.resolve,
+      allowHosts,
+      args.mode === 'brief' && args.configuredHost
+        ? { configuredHost: args.configuredHost, loopbackPort: args.loopbackPort }
+        : undefined,
+    )
     if (!planned.ok) return planned
     const headers = upstreamHeaders(args.mode, planned.hop.url.hostname, args.headers, args.allowHosts)
     const response = await args.exchange(planned.hop, headers)

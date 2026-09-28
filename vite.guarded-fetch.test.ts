@@ -1,7 +1,18 @@
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import zlib from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { exchangePinned, guardedRequest } from './vite.guarded-fetch'
+import { decodeUpstreamBody, exchangePinned, guardedRequest } from './vite.guarded-fetch'
+
+describe('upstream body limit', () => {
+  it('rejects a gzip bomb at the decompressed-size cap', () => {
+    const bomb = zlib.gzipSync(Buffer.alloc(1_000_000, 0x61))
+    expect(bomb.length).toBeLessThan(64_000)
+    expect(() => decodeUpstreamBody(bomb, 'gzip', 64_000)).toThrow(/size limit/)
+    const small = zlib.gzipSync(Buffer.from('ok'))
+    expect(decodeUpstreamBody(small, 'gzip', 64_000).toString('utf8')).toBe('ok')
+  })
+})
 
 describe('pinned upstream transport', () => {
   it('rejects loopback and feed-host targets before opening a socket', async () => {
@@ -17,6 +28,8 @@ describe('pinned upstream transport', () => {
     const feedHost = await guardedRequest({
       rawUrl: 'https://earthquake.usgs.gov/v1/chat/completions',
       mode: 'brief',
+      allowHosts: ['earthquake.usgs.gov'],
+      configuredHost: 'earthquake.usgs.gov',
       headers: { Authorization: 'Bearer sk-test' },
       timeoutMs: 500,
     })

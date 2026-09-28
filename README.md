@@ -188,7 +188,7 @@ The same formula is in **Help (`?`)**.
 **BRIEF** is off by default. Enable **On-screen brief** in Help (`?`):
 
 - **Local Ollama** at `http://127.0.0.1:11434` (probed via `/proxy/brief/ollama`)
-- **OpenAI-compatible HTTPS** (or http loopback): you paste the API base URL + key. Stored only in `localStorage` key `omarchy-overwatch.brief.v1`. Never committed. No bundled cloud key. Overwatch does **not** call any SMF-hosted LLM.
+- **OpenAI-compatible HTTPS** (a known provider host, or the one base URL you paste) or **http loopback on that URL's port only**. You paste the API base URL + key. Stored only in `localStorage` key `omarchy-overwatch.brief.v1`. Never committed. No bundled cloud key. The key is not sent to any other host. Overwatch does **not** call any SMF-hosted LLM.
 
 The model receives a **structured JSON dump of what is currently on screen** (layer toggles/status, selection, heat-cell summary, capped live points and ticker headlines). The system prompt requires citing only those items, saying UNKNOWN when missing, and never inventing coordinates or events. Output opens in center stage with a **“model-generated from on-screen public feeds”** banner and **← Globe**. Missing key, Ollama down, or model errors show **ERR** and an empty brief.
 
@@ -228,7 +228,7 @@ FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe s
 | `/proxy/rwapi` | `https://api.reliefweb.int` |
 | `/proxy/rainviewer` | `https://api.rainviewer.com` (public weather-maps.json) |
 | `/proxy/rss?url=` | Public http/https RSS/Atom only. Loopback, link-local, private, CGNAT, and non-http(s) targets are rejected, including after redirects. Auth headers are not forwarded. |
-| `/proxy/brief` | Local-only BYOK / Ollama chat forwarder (no SMF LLM; key from `X-Overwatch-Brief-Key`, never sent to feed hosts or private addresses) |
+| `/proxy/brief` | Local-only BYOK / Ollama chat forwarder (no SMF LLM; key from `X-Overwatch-Brief-Key`, sent only to a known provider or the configured base URL over https, or to loopback http on that URL's port) |
 | `/proxy/brief/ollama` | Probe `http://127.0.0.1:11434/api/tags` |
 
 ## News ticker

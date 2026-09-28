@@ -17,7 +17,6 @@ import { fetchTicker, type FeedRuntime, type FeedStatus, type TickerItem } from 
 import { loadFeedPrefs, saveFeedPrefs, sanitizeFeedPrefs, type FeedPrefsV1 } from './feeds/storage'
 import { captureRestorePov } from './globe/camera'
 import { classifyStatus, type GeoPoint, type LayerState } from './globe/layers'
-import { beginLayerLoad, cancelLayerLoad, isCurrentLayerLoad, type LayerLoadEpochs } from './globe/layerLoad'
 import { LAYER_DEFS } from './globe/registry'
 import { clearTracksForLayer, ingestTrackPoints, trailsFromBuffer, type TrackTrail } from './globe/tracks'
 import { DockLayout } from './layout/DockLayout'
@@ -183,7 +182,6 @@ function Provider({ children }: { children: ReactNode }) {
   const [activeTheater, setActiveTheater] = useState<string | null>(null)
   const [signalGuideOpen, setSignalGuideOpen] = useState(false)
   const pollIdsRef = useRef<Record<string, string[]>>({})
-  const layerLoadEpoch = useRef<LayerLoadEpochs>({})
   const [tourOpen, setTourOpen] = useState(() => !loadTourCompleted())
   const [tourStep, setTourStep] = useState(0)
   const [mapView, setMapView] = useState<{ lat: number; lng: number; zoom: number } | null>(null)
@@ -500,14 +498,11 @@ function Provider({ children }: { children: ReactNode }) {
   const loadLayer = useCallback(async (id: string) => {
     const def = LAYER_DEFS.find((d) => d.id === id)
     if (!def) return
-    const epoch = beginLayerLoad(layerLoadEpoch.current, id)
-    const stillCurrent = () => isCurrentLayerLoad(layerLoadEpoch.current, id, epoch)
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, enabled: true, status: 'loading', error: null } : l)),
     )
     try {
       const points = await def.fetch()
-      if (!stillCurrent()) return
       const updatedAt = Date.now()
       const previousIds = pollIdsRef.current[def.id] ?? null
       const delta = diffEntityIds(previousIds, points.map((point) => point.id))
@@ -522,9 +517,8 @@ function Provider({ children }: { children: ReactNode }) {
         ingestTrackPoints(def.id, points, updatedAt)
         setTrails(trailsFromBuffer(updatedAt))
       }
-      setLayers((prev) => {
-        if (!stillCurrent()) return prev
-        return prev.map((l) =>
+      setLayers((prev) =>
+        prev.map((l) =>
           l.id === id
             ? {
                 ...l,
@@ -535,13 +529,11 @@ function Provider({ children }: { children: ReactNode }) {
                 status: classifyStatus({ enabled: true, updatedAt, error: null, points }),
               }
             : l,
-        )
-      })
+        ),
+      )
     } catch (err) {
-      if (!stillCurrent()) return
-      setLayers((prev) => {
-        if (!stillCurrent()) return prev
-        return prev.map((l) =>
+      setLayers((prev) =>
+        prev.map((l) =>
           l.id === id
             ? {
                 ...l,
@@ -555,8 +547,8 @@ function Provider({ children }: { children: ReactNode }) {
                 }),
               }
             : l,
-        )
-      })
+        ),
+      )
     }
   }, [])
 
@@ -565,7 +557,6 @@ function Provider({ children }: { children: ReactNode }) {
       const current = layersRef.current.find((l) => l.id === id)
       if (!current) return
       if (current.enabled) {
-        cancelLayerLoad(layerLoadEpoch.current, id)
         setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: false, status: 'off' } : l)))
         if (id === 'opensky' || id === 'ais') {
           clearTracksForLayer(id)
@@ -880,9 +871,6 @@ function Provider({ children }: { children: ReactNode }) {
       setMapNvgState(view.nvg)
       setHeatEnabled(view.heatEnabled)
       setAoi(view.aoi)
-      for (const l of layersRef.current) {
-        if (!view.layers.includes(l.id)) cancelLayerLoad(layerLoadEpoch.current, l.id)
-      }
       setLayers((prev) =>
         prev.map((l) => {
           const on = view.layers.includes(l.id)

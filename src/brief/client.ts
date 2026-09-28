@@ -77,7 +77,7 @@ export async function requestBrief(prefs: BriefPrefsV1, snapshot: BriefSnapshot)
       error:
         prefs.provider === 'ollama'
           ? 'BRIEF ERR — Ollama is only reached at http://127.0.0.1:11434.'
-          : 'BRIEF ERR — API base URL is not allowed. Use https (or http loopback).',
+          : 'BRIEF ERR — API base URL is not allowed. Use a known provider or one https base URL, or http loopback on the configured port.',
     }
   }
   if (prefs.provider === 'openai-compat' && !prefs.apiKey.trim()) {

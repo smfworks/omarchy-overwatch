@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite'
+import { PROXY_CALLER_ERROR, proxyCallerAllowed, type AllowedDevHosts, type HeaderMap } from './src/net/devHost'
 import { guardedRequest } from './vite.guarded-fetch'
 
 type EnvMap = Record<string, string>
@@ -10,7 +11,11 @@ type SimpleRes = {
   end: (chunk?: string) => void
 }
 
-type SimpleReq = { url?: string; method?: string }
+type SimpleReq = { url?: string; method?: string; headers?: HeaderMap }
+
+function isProxyPath(url: string): boolean {
+  return url === '/proxy' || url.startsWith('/proxy/')
+}
 
 const UA = 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)'
 
@@ -339,8 +344,12 @@ async function proxyFirmsApi(env: EnvMap, res: SimpleRes): Promise<void> {
 }
 
 export function liveFeedsPlugin(env: EnvMap): Plugin {
-  const handler = (req: SimpleReq, res: SimpleRes, next: () => void) => {
+  const handler = (req: SimpleReq, res: SimpleRes, next: () => void, allowedHosts: AllowedDevHosts) => {
     const url = pathOf(req)
+    if (isProxyPath(url) && !proxyCallerAllowed(req.headers, allowedHosts)) {
+      sendJson(res, 403, { error: PROXY_CALLER_ERROR })
+      return
+    }
     const run = async () => {
       if (url === '/proxy/opensky/api/states/all' || url === '/proxy/opensky/api/states/all/') {
         await proxyOpenSky(env, res)
@@ -388,13 +397,15 @@ export function liveFeedsPlugin(env: EnvMap): Plugin {
   return {
     name: 'omarchy-live-feeds',
     configureServer(server) {
+      const allowedHosts = server.config.server.allowedHosts ?? []
       server.middlewares.use((req, res, next) => {
-        handler(req as SimpleReq, res as SimpleRes, next)
+        handler(req as SimpleReq, res as SimpleRes, next, allowedHosts)
       })
     },
     configurePreviewServer(server) {
+      const allowedHosts = server.config.preview.allowedHosts ?? []
       server.middlewares.use((req, res, next) => {
-        handler(req as SimpleReq, res as SimpleRes, next)
+        handler(req as SimpleReq, res as SimpleRes, next, allowedHosts)
       })
     },
   }

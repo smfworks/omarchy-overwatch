@@ -23,12 +23,28 @@ async function resolveHost(hostname: string): Promise<ResolvedAddress[]> {
   }))
 }
 
-function decodeBody(raw: Buffer, encoding: string | undefined): Buffer {
+const SIZE_LIMIT = 'upstream response exceeded size limit'
+
+function isOutputCap(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE'
+}
+
+/** Decompress with an output cap. The compressed-byte cap is not enough for a gzip bomb. */
+export function decodeUpstreamBody(raw: Buffer, encoding: string | undefined, maxOutput = MAX_BODY): Buffer {
   const enc = (encoding ?? 'identity').toLowerCase().trim()
-  if (!enc || enc === 'identity') return raw
-  if (enc === 'gzip' || enc === 'x-gzip') return zlib.gunzipSync(raw)
-  if (enc === 'deflate') return zlib.inflateSync(raw)
-  if (enc === 'br') return zlib.brotliDecompressSync(raw)
+  if (!enc || enc === 'identity') {
+    if (raw.length > maxOutput) throw new Error(SIZE_LIMIT)
+    return raw
+  }
+  const options = { maxOutputLength: maxOutput }
+  try {
+    if (enc === 'gzip' || enc === 'x-gzip') return zlib.gunzipSync(raw, options)
+    if (enc === 'deflate') return zlib.inflateSync(raw, options)
+    if (enc === 'br') return zlib.brotliDecompressSync(raw, options)
+  } catch (err) {
+    if (isOutputCap(err)) throw new Error(SIZE_LIMIT)
+    throw err
+  }
   throw new Error(`unsupported content encoding ${enc}`)
 }
 
@@ -75,11 +91,7 @@ export function exchangePinned(
           try {
             const raw = Buffer.concat(chunks)
             const encoding = res.headers['content-encoding']
-            const decoded = decodeBody(raw, Array.isArray(encoding) ? encoding[0] : encoding)
-            if (decoded.length > MAX_BODY) {
-              fail(new Error('upstream response exceeded size limit'))
-              return
-            }
+            const decoded = decodeUpstreamBody(raw, Array.isArray(encoding) ? encoding[0] : encoding)
             const locationHeader = res.headers.location
             const location = Array.isArray(locationHeader) ? locationHeader[0] ?? null : locationHeader ?? null
             const typeHeader = res.headers['content-type']
@@ -125,6 +137,8 @@ export function guardedRequest(args: {
   method?: string
   body?: string
   allowHosts?: readonly string[]
+  configuredHost?: string
+  loopbackPort?: number
   timeoutMs?: number
   maxRedirects?: number
 }): Promise<GuardResult> {
@@ -135,6 +149,8 @@ export function guardedRequest(args: {
     mode: args.mode,
     headers: args.headers,
     allowHosts: args.allowHosts,
+    configuredHost: args.configuredHost,
+    loopbackPort: args.loopbackPort,
     maxRedirects: args.maxRedirects,
     resolve: resolveHost,
     exchange: (hop, headers) => exchangePinned(hop, headers, method, args.body, timeoutMs),
