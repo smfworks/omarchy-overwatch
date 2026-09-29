@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
+import { stripProxyAuthHeaders } from './src/net/ssrf'
 import { liveFeedsPlugin } from './vite.live-feeds'
 import { briefProxyPlugin } from './vite.brief-proxy'
 
@@ -86,6 +87,16 @@ const proxy: Record<string, ProxyOptions> = {
   },
 }
 
+for (const entry of Object.values(proxy)) {
+  const previous = entry.configure
+  entry.configure = (server, options) => {
+    previous?.(server, options)
+    server.on('proxyReq', (proxyReq) => {
+      stripProxyAuthHeaders(proxyReq)
+    })
+  }
+}
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '')
   return {
@@ -113,7 +124,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      host: true,
+      host: '127.0.0.1',
       port: 5173,
       proxy,
     },
@@ -124,7 +135,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'node',
-      include: ['src/**/*.test.ts'],
+      include: ['src/**/*.test.ts', 'vite.guarded-fetch.test.ts'],
     },
   }
 })

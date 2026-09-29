@@ -55,7 +55,7 @@ export function briefConfigError(prefs: BriefPrefsV1): string | null {
   if (prefs.provider === 'openai-compat') {
     if (!prefs.baseUrl.trim()) return 'BRIEF ERR — paste an HTTPS API base URL. No default cloud key exists.'
     if (!allowedBriefUpstream('openai-compat', prefs.baseUrl)) {
-      return 'BRIEF ERR — API base must be https (or http loopback). No SMF-hosted LLM is called.'
+      return 'BRIEF ERR — API base must be a known provider or one https URL, or http loopback on the configured port. No SMF-hosted LLM is called.'
     }
     if (!prefs.apiKey.trim()) return 'BRIEF ERR — API key missing. Stored only in this browser; none is bundled.'
   }

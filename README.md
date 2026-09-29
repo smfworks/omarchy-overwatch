@@ -43,9 +43,9 @@ Captures from Omarchy on mikesai6 (`npm run preview` at `127.0.0.1:4173`):
 Requires Node.js 20+ and npm.
 
 ```bash
-npm install
+npm ci
 npm test
-npm run dev          # http://127.0.0.1:5173
+npm run dev          # http://127.0.0.1:5173 (loopback; pass --host to listen wider)
 ```
 
 Production-style static preview (also used on Omarchy):
@@ -157,6 +157,8 @@ Dev and `vite preview` proxy `/proxy/*` so the browser can reach those APIs. Dir
 
 There is **no** Mapbox, Google Maps, or Stadia key in this HUD. OpenFreeMap is the dark vector source; OSM raster is the compliance-friendly default.
 
+UI type (IBM Plex Sans, IBM Plex Mono, Orbitron) is self-hosted from `public/fonts/`. The HUD does not contact `fonts.googleapis.com` or `fonts.gstatic.com`.
+
 ### Storm map
 
 When a selected live point is **dangerous weather** (NWS event types, EONET severe-storms, NHC tropical cyclones, or a GDACS tropical cyclone label), the center opens a storm map:
@@ -186,7 +188,7 @@ The same formula is in **Help (`?`)**.
 **BRIEF** is off by default. Enable **On-screen brief** in Help (`?`):
 
 - **Local Ollama** at `http://127.0.0.1:11434` (probed via `/proxy/brief/ollama`)
-- **OpenAI-compatible HTTPS** (or http loopback): you paste the API base URL + key. Stored only in `localStorage` key `omarchy-overwatch.brief.v1`. Never committed. No bundled cloud key. Overwatch does **not** call any SMF-hosted LLM.
+- **OpenAI-compatible HTTPS** (a known provider host, or the one base URL you paste) or **http loopback on that URL's port only**. You paste the API base URL + key. Stored only in `localStorage` key `omarchy-overwatch.brief.v1`. Never committed. No bundled cloud key. The key is not sent to any other host. Overwatch does **not** call any SMF-hosted LLM.
 
 The model receives a **structured JSON dump of what is currently on screen** (layer toggles/status, selection, heat-cell summary, capped live points and ticker headlines). The system prompt requires citing only those items, saying UNKNOWN when missing, and never inventing coordinates or events. Output opens in center stage with a **“model-generated from on-screen public feeds”** banner and **← Globe**. Missing key, Ollama down, or model errors show **ERR** and an empty brief.
 
@@ -225,13 +227,13 @@ FIRMS points are a **sampled subset** (highest FRP first, capped) so the globe s
 | `/proxy/nifc` | `https://services3.arcgis.com` (NIFC WFIGS) |
 | `/proxy/rwapi` | `https://api.reliefweb.int` |
 | `/proxy/rainviewer` | `https://api.rainviewer.com` (public weather-maps.json) |
-| `/proxy/rss?url=` | Generic RSS/Atom fetch (`http`/`https` only) |
-| `/proxy/brief` | Local-only BYOK / Ollama chat forwarder (no SMF LLM; key from `X-Overwatch-Brief-Key`) |
+| `/proxy/rss?url=` | Public http/https RSS/Atom only. Loopback, link-local, private, CGNAT, and non-http(s) targets are rejected, including after redirects. Auth headers are not forwarded. |
+| `/proxy/brief` | Local-only BYOK / Ollama chat forwarder (no SMF LLM; key from `X-Overwatch-Brief-Key`, sent only to a known provider or the configured base URL over https, or to loopback http on that URL's port) |
 | `/proxy/brief/ollama` | Probe `http://127.0.0.1:11434/api/tags` |
 
 ## News ticker
 
-Built-in BBC World, ReliefWeb, and GDACS remain. The ⚙ control lets you enable/disable each and add **custom RSS/Atom** URLs (`http`/`https` only). Prefs persist in `omarchy-overwatch.feeds.v1`. Each feed shows **LIVE / STALE / ERR / OFF**. Click a headline to open the depth view (title, source, date, link — no fetched article body). **Pin to case** stores that title/link/date locally.
+Built-in BBC World, ReliefWeb, and GDACS remain. The ⚙ control lets you enable/disable each and add **custom RSS/Atom** URLs (public `http`/`https` only; private and loopback targets are rejected). Prefs persist in `omarchy-overwatch.feeds.v1`. Each feed shows **LIVE / STALE / ERR / OFF**. Click a headline to open the depth view (title, source, date, link — no fetched article body). **Pin to case** stores that title/link/date locally.
 
 ## Case notes
 

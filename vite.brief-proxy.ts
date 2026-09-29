@@ -1,12 +1,14 @@
 import type { Plugin } from 'vite'
 import {
-  allowedBriefUpstream,
+  briefForwardPolicy,
   chatCompletionsUrl,
   friendlyBriefError,
   ollamaChatUrl,
   ollamaTagsUrl,
 } from './src/brief/allow'
+import { PROXY_CALLER_ERROR, proxyCallerAllowed, type AllowedDevHosts } from './src/net/devHost'
 import { OLLAMA_ORIGIN } from './src/brief/types'
+import { guardedRequest } from './vite.guarded-fetch'
 
 const UA = 'OverwatchOsint/1.0 (https://github.com/smfworks/omarchy-overwatch)'
 const BODY_MAX = 800_000
@@ -85,18 +87,32 @@ function readBody(req: SimpleReq): Promise<string> {
 }
 
 async function probeOllama(res: SimpleRes): Promise<void> {
-  const origin = allowedBriefUpstream('ollama', OLLAMA_ORIGIN)
-  if (!origin) {
+  const policy = briefForwardPolicy('ollama', OLLAMA_ORIGIN)
+  if (!policy) {
     sendJson(res, 500, { error: 'Ollama origin is not allowed.' })
     return
   }
   try {
-    const upstream = await fetch(ollamaTagsUrl(origin), {
+    const upstream = await guardedRequest({
+      rawUrl: ollamaTagsUrl(policy.origin),
+      mode: 'brief',
+      allowHosts: policy.allowHosts,
+      configuredHost: policy.configuredHost,
+      loopbackPort: policy.loopbackPort,
       headers: { 'User-Agent': UA, Accept: 'application/json' },
-      signal: AbortSignal.timeout(4000),
+      timeoutMs: 4000,
     })
-    const data = (await upstream.json().catch(() => null)) as { models?: { name?: string }[]; error?: string } | null
     if (!upstream.ok) {
+      sendJson(res, upstream.status, { error: friendlyBriefError(upstream.error, 'ollama') })
+      return
+    }
+    let data: { models?: { name?: string }[]; error?: string } | null = null
+    try {
+      data = JSON.parse(upstream.body) as { models?: { name?: string }[]; error?: string }
+    } catch {
+      data = null
+    }
+    if (upstream.status < 200 || upstream.status >= 300) {
       sendJson(res, upstream.status, {
         error: data?.error || `Ollama HTTP ${upstream.status}. BRIEF stays empty.`,
       })
@@ -141,10 +157,11 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
     return
   }
   const baseUrl = typeof row.baseUrl === 'string' ? row.baseUrl : ''
-  const origin = allowedBriefUpstream(provider, baseUrl)
-  if (!origin) {
+  const policy = briefForwardPolicy(provider, baseUrl)
+  if (!policy) {
     sendJson(res, 400, {
-      error: 'BRIEF ERR — upstream not allowed. Ollama is loopback:11434; BYOK must be https or http loopback.',
+      error:
+        'BRIEF ERR — upstream not allowed. The API key is sent only to a known provider or the one configured base URL, over https, or to loopback http on the configured port.',
     })
     return
   }
@@ -163,37 +180,38 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
     return
   }
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': UA,
+  }
+  if (provider === 'openai-compat') headers.Authorization = `Bearer ${key}`
+  const target = provider === 'ollama' ? ollamaChatUrl(policy.origin) : chatCompletionsUrl(policy.origin)
+  const payload =
+    provider === 'ollama'
+      ? { model, messages: row.messages, stream: false }
+      : { model, messages: row.messages, temperature: 0.2, max_tokens: 800 }
+
   try {
-    if (provider === 'ollama') {
-      const upstream = await fetch(ollamaChatUrl(origin), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
-        body: JSON.stringify({ model, messages: row.messages, stream: false }),
-        signal: AbortSignal.timeout(45_000),
-      })
-      const text = await upstream.text()
-      res.statusCode = upstream.status
-      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json; charset=utf-8')
-      res.setHeader('Cache-Control', 'no-store')
-      res.end(text)
+    const upstream = await guardedRequest({
+      rawUrl: target,
+      mode: 'brief',
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      allowHosts: policy.allowHosts,
+      configuredHost: policy.configuredHost,
+      loopbackPort: policy.loopbackPort,
+      timeoutMs: 45_000,
+    })
+    if (!upstream.ok) {
+      sendJson(res, upstream.status, { error: friendlyBriefError(upstream.error, provider) })
       return
     }
-    const upstream = await fetch(chatCompletionsUrl(origin), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent': UA,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ model, messages: row.messages, temperature: 0.2, max_tokens: 800 }),
-      signal: AbortSignal.timeout(45_000),
-    })
-    const text = await upstream.text()
     res.statusCode = upstream.status
-    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json; charset=utf-8')
+    res.setHeader('Content-Type', upstream.contentType || 'application/json; charset=utf-8')
     res.setHeader('Cache-Control', 'no-store')
-    res.end(text)
+    res.end(upstream.body)
   } catch (err) {
     sendJson(res, 502, {
       error: friendlyBriefError(err instanceof Error ? err.message : 'Brief upstream failed', provider),
@@ -201,9 +219,17 @@ async function proxyBrief(req: SimpleReq, res: SimpleRes): Promise<void> {
   }
 }
 
+function isProxyPath(url: string): boolean {
+  return url === '/proxy' || url.startsWith('/proxy/')
+}
+
 export function briefProxyPlugin(): Plugin {
-  const handler = (req: SimpleReq, res: SimpleRes, next: () => void) => {
+  const handler = (req: SimpleReq, res: SimpleRes, next: () => void, allowedHosts: AllowedDevHosts) => {
     const url = pathOf(req.url)
+    if (isProxyPath(url) && !proxyCallerAllowed(req.headers, allowedHosts)) {
+      sendJson(res, 403, { error: PROXY_CALLER_ERROR })
+      return
+    }
     if (url === '/proxy/brief/ollama' && (req.method === 'GET' || req.method === 'HEAD')) {
       void probeOllama(res).catch((err: unknown) => {
         sendJson(res, 502, { error: err instanceof Error ? err.message : 'Ollama probe failed' })
@@ -222,13 +248,15 @@ export function briefProxyPlugin(): Plugin {
   return {
     name: 'omarchy-brief-proxy',
     configureServer(server) {
+      const allowedHosts = server.config.server.allowedHosts ?? []
       server.middlewares.use((req, res, next) => {
-        handler(req as SimpleReq, res as SimpleRes, next)
+        handler(req as SimpleReq, res as SimpleRes, next, allowedHosts)
       })
     },
     configurePreviewServer(server) {
+      const allowedHosts = server.config.preview.allowedHosts ?? []
       server.middlewares.use((req, res, next) => {
-        handler(req as SimpleReq, res as SimpleRes, next)
+        handler(req as SimpleReq, res as SimpleRes, next, allowedHosts)
       })
     },
   }
